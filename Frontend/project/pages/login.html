@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/auth.css" />
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="mark"><i class="fa-solid fa-utensils"></i></div>
+        <h1>Welcome Back</h1>
+        <p>Login to your Smart Canteen account</p>
+      </div>
+
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label>Enrollment Number or Email</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-graduation-cap"></i></span>
+            <input class="input" id="identifier" placeholder="EN2026001 or you@example.com" />
+          </div>
+          <div class="field-error" id="err-identifier"></div>
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-lock"></i></span>
+            <input class="input" id="password" type="password" placeholder="Enter your password" />
+          </div>
+          <div class="field-error" id="err-password"></div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Login</button>
+      </form>
+
+      <div class="auth-footer">
+        <a href="#" id="forgotLink">Forgot Password?</a>
+      </div>
+      <div class="auth-footer">
+        Don't have an account? <a href="register.html">Register here</a>
+      </div>
+      <div class="auth-footer" style="margin-top:8px;">
+        <a href="admin-login.html">Admin Login →</a> &nbsp;|&nbsp;
+        <a href="../index.html">← Home</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/app.js"></script>
+  <script>
+    // Show registration success toast if present
+    try {
+      const reg = Store.get('scms_registration_success', null);
+      if (reg && reg.message) {
+        Toast.show(reg.message, 'success');
+        Store.remove('scms_registration_success');
+      }
+    } catch (e) { /* ignore */ }
+
+    const form = document.getElementById('loginForm');
+
+    function setError(id, msg) {
+      document.getElementById('err-' + id).textContent = msg || '';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('identifier').value.trim();
+      const pw = document.getElementById('password').value;
+      setError('identifier', ''); setError('password', '');
+
+      if (!id) { setError('identifier', 'Please enter enrollment or email'); return; }
+      if (pw.length < 1) { setError('password', 'Please enter your password'); return; }
+
+      // Prevent admin login through student portal
+      if (id === 'janvisatpute18@gmail.com') {
+        Toast.show('❌ Admin cannot login here. Use Admin Portal!', 'error', 2000);
+        return;
+      }
+
+      try {console.log("LOGIN REQUEST:", { identifier: id, password: pw });
+
+        const resp = await fetch('http://127.0.0.1:5000/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: id, password: pw })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          setError('password', data.message || 'Login failed');
+          return;
+        }
+
+        const u = data.user || {};
+        Auth.login({
+          name: u.name || 'Student User',
+          enrollment: u.enrollment || (id.includes('@') ? 'EN2026001' : id),
+          email: u.email || (id.includes('@') ? id : 'student@edu.in'),
+          role: 'student',
+          department: u.department || 'Computer Science',
+          phone: u.phone || '+91 98765 43210',
+          gender: u.gender || 'male',
+          password: pw,
+          profile_images: u.profile_images || undefined
+        });
+
+        Toast.show('Login successful!', 'success');
+        setTimeout(() => location.href = 'dashboard.html', 800);
+      } catch (err) {
+        console.error('Login error', err);
+        setError('password', 'Login failed');
+      }
+    });
+
+    document.getElementById('forgotLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:12px;">Reset Password</h3>
+        <div class="field"><label>Email</label><input class="input" id="resetEmail" type="email" placeholder="Your registered email" /></div>
+        <button class="btn btn-primary btn-block" id="sendOtpBtn">Send OTP</button>
+        <div id="resetFlow" style="display:none;margin-top:16px;">
+          <div class="field"><label>OTP</label><input class="input" id="resetOtp" placeholder="Enter OTP" maxlength="6" /></div>
+          <div class="field"><label>New Password</label><input class="input" id="resetPassword" type="password" placeholder="6 char password" maxlength="6" /></div>
+          <div class="field"><label>Confirm Password</label><input class="input" id="resetConfirm" type="password" placeholder="Confirm password" maxlength="6" /></div>
+          <div id="resetValidation" style="color:var(--error);font-size:0.9rem;min-height:20px;margin-bottom:12px;"></div>
+          <button class="btn btn-primary btn-block" id="verifyResetBtn">Update Password</button>
+        </div>
+      `);
+
+      const sendOtpBtn = document.getElementById('sendOtpBtn');
+      const resetFlow = document.getElementById('resetFlow');
+      const resetEmail = document.getElementById('resetEmail');
+      const resetOtp = document.getElementById('resetOtp');
+      const resetPassword = document.getElementById('resetPassword');
+      const resetConfirm = document.getElementById('resetConfirm');
+      const resetValidation = document.getElementById('resetValidation');
+      const verifyResetBtn = document.getElementById('verifyResetBtn');
+      let otpSentTo = null;
+
+      function validateResetInputs() {
+        resetValidation.textContent = '';
+        const pass = resetPassword.value;
+        const confirm = resetConfirm.value;
+        if (pass.length !== 6) {
+          resetValidation.textContent = 'Password must be exactly 6 characters.';
+          verifyResetBtn.disabled = true;
+          return false;
+        }
+        if (confirm && pass !== confirm) {
+          resetValidation.textContent = 'Passwords do not match.';
+          verifyResetBtn.disabled = true;
+          return false;
+        }
+        resetValidation.textContent = '';
+        verifyResetBtn.disabled = false;
+        return true;
+      }
+
+      sendOtpBtn.addEventListener('click', () => {
+        const email = resetEmail.value.trim();
+        if (!validateEmail(email)) {
+          Toast.show('Enter a valid registered email', 'error');
+          return;
+        }
+        const payload = Auth.sendResetOTP(email);
+        if (!payload) {
+          Toast.show('Email not found. Please register first.', 'error');
+          return;
+        }
+        otpSentTo = email;
+        Toast.show('OTP sent to your email (simulated).', 'success');
+        resetFlow.style.display = 'block';
+      });
+
+      [resetPassword, resetConfirm].forEach(input => {
+        input.addEventListener('input', validateResetInputs);
+      });
+
+      verifyResetBtn.addEventListener('click', () => {
+        const email = otpSentTo || resetEmail.value.trim();
+        const otp = resetOtp.value.trim();
+        const newPass = resetPassword.value;
+        const confirm = resetConfirm.value;
+
+        if (!otp || !newPass || !confirm) {
+          resetValidation.textContent = 'Fill all reset fields.';
+          return;
+        }
+        if (!validateResetInputs()) return;
+        const success = Auth.resetPasswordByEmail(email, otp, newPass);
+        if (!success) {
+          resetValidation.textContent = 'OTP invalid or expired. Please retry.';
+          Toast.show('OTP validation failed.', 'error');
+          return;
+        }
+        Toast.show('Password updated successfully. Please login.', 'success');
+        overlay.remove();
+      });
+    });
+  </script>
+</body>
+</html>

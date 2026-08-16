@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/translations.js"></script>
+  <script>
+    initDashboard('home');
+    const user = Auth.getUser() || { name: 'Student' };
+    const content = document.getElementById('pageContent');
+    content.innerHTML = `
+      <div class="page-header">
+        <h1 class="page-title">Hello, ${user.name}! <i class="fa-solid fa-hand-wave"></i></h1>
+        <p class="page-subtitle">Here's what's happening in your canteen today.</p>
+      </div>
+
+      <div class="banner">
+        <h2>Good Food Good Mood <i class="fa-solid fa-face-smile"></i></h2>
+        <p>Order your favorite meals in seconds. Fresh, fast, and always delicious.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+          <button class="btn btn-primary" style="background:#fff;color:var(--primary);" onclick="location.href='menu.html'">Order Now</button>
+          <button class="btn btn-ghost" style="background:rgba(255,255,255,0.9);color:var(--primary);" onclick="location.href='food-scan.html'">Scan Food</button>
+        </div>
+        <div class="banner-emoji"><i class="fa-solid fa-burger"></i></div>
+      </div>
+
+      <div class="stat-grid stagger">
+        <div class="stat-card">
+          <div class="stat-icon orange"><i class="fa-solid fa-wallet"></i></div>
+          <div><div class="stat-value">${formatINR(Wallet.getBalance())}</div><div class="stat-label">Wallet Balance</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red"><i class="fa-solid fa-box"></i></div>
+          <div><div class="stat-value">2</div><div class="stat-label">Pending Orders</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i class="fa-solid fa-circle-check"></i></div>
+          <div><div class="stat-value">28</div><div class="stat-label">Completed Orders</div></div>
+        </div>
+      </div>
+
+      <div class="page-header" style="margin-top:32px;">
+        <h2 class="page-title" style="font-size:1.5rem;">Popular Foods <i class="fa-solid fa-fire"></i></h2>
+      </div>
+      <div class="food-grid" id="popularGrid"></div>
+    `;
+
+    // Load popular foods from SQLite database through Flask API
+async function loadPopularFoods() {
+  try {
+    const response = await fetch("http://127.0.0.1:5000/api/foods");
+
+    if (!response.ok) {
+      throw new Error("Failed to load food data");
+    }
+
+    const menuItems = await response.json();
+
+    const categoryResponse = await fetch(
+  "http://127.0.0.1:5000/api/categories"
+);
+
+if (!categoryResponse.ok) {
+  throw new Error("Failed to load categories");
+}
+
+const categories = await categoryResponse.json();
+
+const categoryMap = {};
+
+categories.forEach(category => {
+  categoryMap[String(category.ID)] = category.Category_name;
+});
+
+console.log("Category data from database:", categories);
+
+console.log("Food data from database:", menuItems);
+
+    const grid = document.getElementById("popularGrid");
+    grid.innerHTML = "";
+
+    // Show first 8 foods
+    menuItems.slice(0, 8).forEach(item => {
+
+      const imageFiles = {
+        "Tea": "Tea.jpg",
+        "Coffee": "Coffee.jpg",
+        "Poha": "Poha.jpg",
+        "Upma": "Upma.jpg",
+        "Vada Pav": "Vada Pav.jpg",
+        "Samosa": "Samosa.jpg",
+        "Water Bottle": "Water Bottle.jpg",
+        "Fizz Jeera Soda": "Fizz Jeera Soda.jpg",
+        "Sprite": "Sprite.jpg",
+        "Thums Up": "Thums Up.jpg",
+        "Cornetto Ice Cream": "Cornetto Ice Cream.jpg",
+        "Chocobar Ice Cream": "Chocobar Ice Cream.jpg",
+        "Pani puri": "Pani Puri.jpg",
+        "Bhel": "Bhel.jpg",
+        "Samosa chaat": "Samosa Chaat.jpg",
+        "Veg Thali": "Veg Thali.jpg",
+        "Dahi Puri": "Dahi Puri.jpg",
+        "Misal Pav": "Misal Pav.jpg",
+        "Pav Bhaji": "Pav Bhaji.jpg",
+        "Idli": "Idli.jpg",
+        "Dosa": "Dosa.jpg",
+        "Lassi": "Lassi.jpg",
+        "Puri Bhaji": "Puri Bhaji.png",
+        "Maaza": "Maaza.jpg",
+        "cup ice cream": "Cup Ice Cream.jpg",
+        "Potato chips": "Potato Chips.jpg",
+        "Tedhe Medhe": "Tedhe Medhe.jpg",
+        "Dark Chocolate": "Dark Chocolate.jpg",
+        "Dairy Milk": "Dairy Milk.jpg",
+        "5 Star": "5 Star.jpg",
+        "Strawberry": "Strawberry.jpg",
+        "pulse": "Pulse.jpg",
+        "Masala chips": "Masala Chips.jpg",
+        "Tomato Chips": "Tomato Chips.jpg"
+      };
+
+      const imageName = imageFiles[item.Food_name];
+
+      const card = document.createElement("div");
+      card.className = "food-card";
+
+      card.innerHTML = `
+        <div class="food-img-wrap"
+             style="display:flex;align-items:center;justify-content:center;position:relative;">
+
+          <img
+            class="food-img"
+            src="../assets/images/food/${imageName}"
+            alt="${item.Food_name}"
+            loading="lazy"
+            onerror="console.error('Image not found:', this.src);"
+          />
+
+          <span class="food-cat-badge">
+           ${categoryMap[String(item.Category_id)] || "Food"}
+          </span>
+
+          <button
+            class="food-fav"
+            onclick="Fav.toggle(${item.Food_id});this.classList.toggle('active')">
+            <i class="fa-solid fa-heart"></i>
+          </button>
+
+        </div>
+
+        <div class="food-body">
+
+          <div class="food-name">
+            ${item.Food_name}
+          </div>
+
+          <div class="food-meta">
+
+            <span class="food-price">
+              ${formatINR(item.Price)}
+            </span>
+
+            <span class="food-rating">
+              <span class="stars">★★★★★</span>
+              4.5
+            </span>
+
+          </div>
+
+        </div>
+      `;
+
+      grid.appendChild(card);
+    });
+
+  } catch (error) {
+    console.error("Error loading foods from database:", error);
+
+    const grid = document.getElementById("popularGrid");
+
+    if (grid) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </span>
+          <p>Unable to load food data.</p>
+        </div>
+      `;
+    }
+  }
+}
+
+loadPopularFoods();
+ </script>
+</body>
+</html>

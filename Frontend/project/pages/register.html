@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/auth.css" />
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card wide">
+      <div class="auth-logo">
+        <div class="mark"><i class="fa-solid fa-utensils"></i></div>
+        <h1>Create Account</h1>
+        <p>Join Smart Canteen today</p>
+      </div>
+
+      <form id="registerForm" novalidate>
+        <div class="field">
+          <label>Username</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-user"></i></span>
+            <input class="input" id="username" placeholder="Choose a username" />
+          </div>
+          <div class="field-error" id="err-username"></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Enrollment Number</label>
+            <div class="input-group">
+              <span class="icon"><i class="fa-solid fa-graduation-cap"></i></span>
+              <input class="input" id="enrollment" placeholder="e.g. EN2026001" />
+            </div>
+            <div class="field-error" id="err-enrollment"></div>
+          </div>
+
+          <div class="field">
+            <label>Phone</label>
+            <div class="input-group">
+              <span class="icon"><i class="fa-solid fa-mobile-screen-button"></i></span>
+              <input class="input" id="phone" type="tel" placeholder="e.g. +91 98765 43210" />
+            </div>
+            <div class="field-error" id="err-phone"></div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Department</label>
+            <div class="input-group">
+              <span class="icon"><i class="fa-solid fa-building-columns"></i></span>
+              <select class="input" id="department">
+                <option value="Computer Science">Computer Science</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Mechanical">Mechanical</option>
+                <option value="Civil">Civil</option>
+              </select>
+            </div>
+            <div class="field-error" id="err-department"></div>
+          </div>
+
+          <div class="field">
+            <label>Gender</label>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="gender" value="male" checked /> Male</label>
+              <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="gender" value="female" /> Female</label>
+              <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="gender" value="other" /> Other</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Email</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-envelope"></i></span>
+            <input class="input" id="email" type="email" placeholder="you@example.com" />
+          </div>
+          <div class="field-error" id="err-email"></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Password</label>
+            <div class="input-group">
+              <span class="icon"><i class="fa-solid fa-lock"></i></span>
+              <input class="input" id="password" type="password" placeholder="Min 6 characters" />
+            </div>
+            <div class="password-strength"><div class="bar" id="strengthBar"></div></div>
+            <div class="field-error" id="err-password"></div>
+          </div>
+
+          <div class="field">
+            <label>Confirm Password</label>
+            <div class="input-group">
+              <span class="icon"><i class="fa-solid fa-lock"></i></span>
+              <input class="input" id="confirm" type="password" placeholder="Re-enter password" />
+            </div>
+            <div class="field-error" id="err-confirm"></div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Register</button>
+      </form>
+
+      <div class="auth-footer">
+        Already have an account? <a href="login.html">Login here</a> or <a href="#" id="registerForgotLink">Forgot Password?</a>
+      </div>
+      <div class="auth-footer" style="margin-top:8px;">
+        <a href="../index.html">← Back to Home</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/app.js"></script>
+  <script>
+    const form = document.getElementById('registerForm');
+
+    // Password strength bar
+    document.getElementById('password').addEventListener('input', (e) => {
+      const score = passwordStrength(e.target.value);
+      const bar = document.getElementById('strengthBar');
+      const colors = ['#E0E0E0', '#E74C3C', '#F1C40F', '#3498DB', '#2ECC71'];
+      bar.style.width = (score / 4) * 100 + '%';
+      bar.style.background = colors[score];
+    });
+
+    function setError(id, msg) {
+      document.getElementById('err-' + id).textContent = msg || '';
+      const input = document.getElementById(id);
+      input.parentElement.parentElement.classList.toggle('invalid', !!msg);
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      console.log("REGISTER BUTTON CLICKED");
+      console.log("VALIDATION PASSED");
+      const username = document.getElementById('username').value.trim();
+      const enrollment = document.getElementById('enrollment').value.trim();
+      const phone = document.getElementById('phone').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirm').value;
+
+      let valid = true;
+      ['username','enrollment','phone','email','department','password','confirm'].forEach(f => setError(f, ''));
+
+      if (username.length < 3) { setError('username', 'Username must be at least 3 characters'); valid = false; }
+      if (!validateEnrollment(enrollment)) { setError('enrollment', 'Enter a valid enrollment number (min 6 alphanumeric)'); valid = false; }
+      if (!validatePhone(phone)) { setError('phone', 'Enter a valid phone number'); valid = false; }
+      const department = document.getElementById('department').value.trim();
+      if (!department) { setError('department', 'Please select a department'); valid = false; }
+      if (!validateEmail(email)) { setError('email', 'Enter a valid email address'); valid = false; }
+      if (password.length < 6) { setError('password', 'Password must be at least 6 characters'); valid = false; }
+      if (confirm !== password) { setError('confirm', 'Passwords do not match'); valid = false; }
+
+      if (!valid) return;
+
+      const gender = (document.querySelector('input[name="gender"]:checked') || {}).value || 'male';
+      const profile = {
+        name: username,
+        enrollment,
+        email,
+        role: 'student',
+        department: department || 'Computer Science',
+        phone,
+        password,
+        gender,
+        profile_images: gender === 'female' ? 'assets/profile/Female.svg' : 'assets/profile/male.svg'
+      };
+      try {
+    const response = await fetch("http://127.0.0.1:5000/api/register", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: username,
+          enrollment: enrollment,
+          email: email,
+          department: department,
+          password: password,
+          gender: profile.gender,
+          phone: phone,
+          profile_images: profile.profile_images
+        })
+    });
+
+    const result = await response.json();
+    console.log("STEP 1: REGISTER RESPONSE RECEIVED", result);
+
+    if (!response.ok) {
+        Toast.show(result.message || "Registration failed", "error");
+        return;
+    }
+
+   // Registration successful
+Store.set("scms_registration_success", {
+  message: "Registration successful! Please login."
+});
+
+window.location.href = "./login.html";
+
+} catch (error) {
+    console.error("FULL REGISTER ERROR:", error);
+
+    Toast.show(
+        "Register API connection error. Check Console.",
+        "error"
+    );
+}
+    });
+    document.getElementById('registerForgotLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:12px;">Reset Password</h3>
+        <div class="field"><label>Email</label><input class="input" id="resetEmail" type="email" placeholder="Your registered email" /></div>
+        <button class="btn btn-primary btn-block" id="sendOtpBtn">Send OTP</button>
+        <div id="resetFlow" style="display:none;margin-top:16px;">
+          <div class="field"><label>OTP</label><input class="input" id="resetOtp" placeholder="Enter OTP" maxlength="6" /></div>
+          <div class="field"><label>New Password</label><input class="input" id="resetPassword" type="password" placeholder="6 char password" maxlength="6" /></div>
+          <div class="field"><label>Confirm Password</label><input class="input" id="resetConfirm" type="password" placeholder="Confirm password" maxlength="6" /></div>
+          <div id="resetValidation" style="color:var(--error);font-size:0.9rem;min-height:20px;margin-bottom:12px;"></div>
+          <button class="btn btn-primary btn-block" id="verifyResetBtn">Update Password</button>
+        </div>
+      `);
+
+      const sendOtpBtn = document.getElementById('sendOtpBtn');
+      const resetFlow = document.getElementById('resetFlow');
+      const resetEmail = document.getElementById('resetEmail');
+      const resetOtp = document.getElementById('resetOtp');
+      const resetPassword = document.getElementById('resetPassword');
+      const resetConfirm = document.getElementById('resetConfirm');
+      const resetValidation = document.getElementById('resetValidation');
+      const verifyResetBtn = document.getElementById('verifyResetBtn');
+      let otpSentTo = null;
+
+      function validateResetInputs() {
+        resetValidation.textContent = '';
+        const pass = resetPassword.value;
+        const confirm = resetConfirm.value;
+        if (pass.length !== 6) {
+          resetValidation.textContent = 'Password must be exactly 6 characters.';
+          verifyResetBtn.disabled = true;
+          return false;
+        }
+        if (confirm && pass !== confirm) {
+          resetValidation.textContent = 'Passwords do not match.';
+          verifyResetBtn.disabled = true;
+          return false;
+        }
+        resetValidation.textContent = '';
+        verifyResetBtn.disabled = false;
+        return true;
+      }
+
+      sendOtpBtn.addEventListener('click', () => {
+        const email = resetEmail.value.trim();
+        if (!validateEmail(email)) {
+          Toast.show('Enter a valid registered email', 'error');
+          return;
+        }
+        const payload = Auth.sendResetOTP(email);
+        if (!payload) {
+          Toast.show('Email not found. Please register first.', 'error');
+          return;
+        }
+        otpSentTo = email;
+        Toast.show('OTP sent to your email (simulated).', 'success');
+        resetFlow.style.display = 'block';
+      });
+
+      [resetPassword, resetConfirm].forEach(input => {
+        input.addEventListener('input', validateResetInputs);
+      });
+
+      verifyResetBtn.addEventListener('click', () => {
+        const email = otpSentTo || resetEmail.value.trim();
+        const otp = resetOtp.value.trim();
+        const newPass = resetPassword.value;
+        const confirm = resetConfirm.value;
+
+        if (!otp || !newPass || !confirm) {
+          resetValidation.textContent = 'Fill all reset fields.';
+          return;
+        }
+        if (!validateResetInputs()) return;
+        const success = Auth.resetPasswordByEmail(email, otp, newPass);
+        if (!success) {
+          resetValidation.textContent = 'OTP invalid or expired. Please retry.';
+          Toast.show('OTP validation failed.', 'error');
+          return;
+        }
+        Toast.show('Password updated successfully. Please login.', 'success');
+        overlay.remove();
+      });
+    });
+  </script>
+</body>
+</html>

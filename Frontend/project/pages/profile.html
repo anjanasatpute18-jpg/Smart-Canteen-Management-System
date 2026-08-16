@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profile - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <style>
+    .profile-header { display:flex; align-items:center; gap:24px; flex-wrap:wrap; }
+    .profile-avatar { width:120px; height:120px; border-radius:50%; object-fit:cover; border:4px solid var(--primary); box-shadow:var(--shadow-orange); }
+    .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:640px; }
+    .info-item { background:var(--secondary); border:1px solid var(--ink-200); border-radius:14px; padding:16px; }
+    .info-item .label { font-size:12px; color:var(--ink-500); text-transform:uppercase; letter-spacing:1px; }
+    .info-item .value { font-weight:600; font-size:1.05rem; margin-top:4px; }
+    @media (max-width:600px){ .info-grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/translations.js"></script>
+  <script>
+    initDashboard('profile');
+    const user = Auth.getProfile();
+    function getProfileImage(userData) {
+      // Prefer explicit profile_images if provided
+      if (userData?.profile_images) return '../' + userData.profile_images.replace(/^\/+/, '');
+      const gender = String(userData?.gender || '').toLowerCase();
+      const name = String(userData?.name || '').toLowerCase();
+      const femaleKeywords = ['female', 'girl', 'she', 'her'];
+      const maleKeywords = ['male', 'boy', 'he', 'him'];
+      const isFemale = femaleKeywords.some(k => gender.includes(k) || name.includes(k));
+      const isMale = maleKeywords.some(k => gender.includes(k) || name.includes(k));
+      if (isFemale && !isMale) return '../assets/profile/Female.svg';
+      if (isMale && !isFemale) return '../assets/profile/male.svg';
+      return gender === 'female' ? '../assets/profile/Female.svg' : '../assets/profile/male.svg';
+    }
+    const profileImage = getProfileImage(user);
+    const content = document.getElementById('pageContent');
+    const history = Auth.getLoginHistory();
+    const isAdmin = user.role === 'admin';
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h1 class="page-title">My Profile <i class="fa-solid fa-user"></i></h1>
+        <p class="page-subtitle">Manage your personal information</p>
+      </div>
+
+      <div class="glass" style="padding:32px;margin-bottom:24px;">
+        <div class="profile-header">
+          <img class="profile-avatar" src="${profileImage}" alt="Profile" />
+          <div style="flex:1;min-width:200px;">
+            <h2 style="font-size:1.5rem;">${user.name}</h2>
+            <p class="text-muted">${user.email}</p>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+              <span class="badge badge-primary">${isAdmin ? 'Admin' : 'Student'}</span>
+              <span class="badge badge-success">Active</span>
+              ${isAdmin ? '<span class="badge badge-secondary">Admin ID: ' + (user.adminId || '—') + '</span>' : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-primary" id="editBtn"><i class="fa-solid fa-pen-to-square"></i> Edit Profile</button>
+            <button class="btn btn-outline" id="changePasswordBtn"><i class="fa-solid fa-key"></i> Change Password</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-grid">
+        <div class="info-item"><div class="label">Full Name</div><div class="value">${user.name}</div></div>
+        <div class="info-item"><div class="label">${isAdmin ? 'Admin Email' : 'Enrollment Number'}</div><div class="value">${isAdmin ? user.email : user.enrollment}</div></div>
+        <div class="info-item"><div class="label">Email</div><div class="value">${user.email}</div></div>
+        <div class="info-item"><div class="label">Department</div><div class="value">${user.department || 'Computer Science'}</div></div>
+        <div class="info-item"><div class="label">Phone</div><div class="value">${user.phone || '+91 98765 43210'}</div></div>
+      </div>
+
+      <div class="glass" style="padding:24px;margin-top:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+          <h2 style="font-size:1.2rem;margin:0;">Login History</h2>
+          <span style="color:var(--ink-500);font-size:0.95rem;">${history.length} record${history.length === 1 ? '' : 's'}</span>
+        </div>
+        <div style="display:grid;gap:12px;">
+          ${history.length ? history.map(entry => `
+            <div class="info-item" style="padding:16px;">
+              <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <div>
+                  <div class="label">${entry.type === 'login' ? 'Signed In' : 'Signed Out'}</div>
+                  <div class="value">${entry.message}</div>
+                </div>
+                <div style="text-align:right;min-width:140px;">
+                  <div class="label">${entry.role === 'admin' ? 'Admin' : 'Student'}</div>
+                  <div class="value" style="font-size:0.95rem;">${entry.timestamp}</div>
+                </div>
+              </div>
+            </div>
+          `).join('') : '<div class="info-item">No history available yet.</div>'}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('editBtn').onclick = () => {
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:16px;">Edit Profile</h3>
+        <div class="field"><label>Full Name</label><input class="input" id="profileName" value="${user.name}" /></div>
+        <div class="field"><label>Email</label><input class="input" id="profileEmail" value="${user.email}" /></div>
+        <div class="field"><label>Gender</label>
+          <select class="input" id="profileGender">
+            <option value="male" ${user.gender==='male' ? 'selected' : ''}>Male</option>
+            <option value="female" ${user.gender==='female' ? 'selected' : ''}>Female</option>
+            <option value="other" ${!user.gender || (user.gender!=='male' && user.gender!=='female') ? 'selected' : ''}>Other</option>
+          </select>
+        </div>
+        <div class="field"><label>Department</label><input class="input" id="profileDept" value="${user.department || 'Computer Science'}" /></div>
+        <div class="field"><label>Phone</label><input class="input" id="profilePhone" value="${user.phone || '+91 98765 43210'}" /></div>
+        <div style="display:flex;gap:12px;">
+          <button class="btn btn-ghost" style="flex:1;" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" style="flex:1;" onclick="saveProfile(this.closest('.modal-overlay'))">Save Changes</button>
+        </div>
+      `);
+    };
+
+    document.getElementById('changePasswordBtn').onclick = () => {
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:16px;">Change Password</h3>
+        <div class="field"><label>Current Password</label><input class="input" id="currentPassword" type="password" placeholder="Current password" /></div>
+        <div class="field"><label>New Password</label><input class="input" id="newPassword" type="password" placeholder="New password" maxlength="6" /></div>
+        <div class="field"><label>Confirm Password</label><input class="input" id="confirmPassword" type="password" placeholder="Confirm new password" maxlength="6" /></div>
+        <div id="passwordValidation" style="color:var(--error);font-size:0.9rem;min-height:20px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:12px;">
+          <button class="btn btn-ghost" style="flex:1;" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+          <button class="btn btn-primary" style="flex:1;" id="passwordUpdateBtn" onclick="changePassword(this.closest('.modal-overlay'))">Update Password</button>
+        </div>
+      `);
+
+      const newPasswordInput = document.getElementById('newPassword');
+      const confirmPasswordInput = document.getElementById('confirmPassword');
+      const validationMessage = document.getElementById('passwordValidation');
+      const updateButton = document.getElementById('passwordUpdateBtn');
+
+      function validatePasswordFields() {
+        const newPw = newPasswordInput.value;
+        const confirmPw = confirmPasswordInput.value;
+        if (newPw.length !== 6) {
+          validationMessage.textContent = 'Password must be exactly 6 characters long.';
+          updateButton.disabled = true;
+          return false;
+        }
+        if (confirmPw && newPw !== confirmPw) {
+          validationMessage.textContent = 'Confirm Password does not match.';
+          updateButton.disabled = true;
+          return false;
+        }
+        validationMessage.textContent = '';
+        updateButton.disabled = false;
+        return true;
+      }
+
+      newPasswordInput.addEventListener('input', validatePasswordFields);
+      confirmPasswordInput.addEventListener('input', validatePasswordFields);
+      validatePasswordFields();
+    };
+
+    window.saveProfile = (overlay) => {
+      const updated = {
+        name: document.getElementById('profileName').value.trim() || user.name,
+        email: document.getElementById('profileEmail').value.trim() || user.email,
+        department: document.getElementById('profileDept').value.trim() || user.department || 'Computer Science',
+        phone: document.getElementById('profilePhone').value.trim() || user.phone || '+91 98765 43210',
+
+        gender: (document.getElementById('profileGender') || {}).value || user.gender || 'male'
+      };
+      // Persist changes to backend database first
+      (async () => {
+        try {
+          const resp = await fetch('http://127.0.0.1:5000/api/update_profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...updated, enrollment: user.enrollment, email: user.email })
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            Toast.show(data.message || 'Update failed', 'error');
+            return;
+          }
+          // Update local state + database
+await Auth.updateProfile(updated);
+
+Toast.show('Profile updated successfully!', 'success');
+overlay.remove();
+
+setTimeout(() => location.reload(), 700);
+      } catch (err) {
+  console.error('Update error:', err);
+  Toast.show(err.message || 'Update failed', 'error');
+}  
+      })();
+    };
+
+    window.changePassword = (overlay) => {
+      const oldPw = document.getElementById('currentPassword').value;
+      const newPw = document.getElementById('newPassword').value;
+      const confirmPw = document.getElementById('confirmPassword').value;
+      const validationMessage = document.getElementById('passwordValidation');
+
+      if (!oldPw || !newPw || !confirmPw) {
+        validationMessage.textContent = 'Please fill all password fields.';
+        Toast.show('Please fill all password fields', 'error');
+        return;
+      }
+      if (newPw.length !== 6) {
+        validationMessage.textContent = 'Password must be exactly 6 characters long.';
+        Toast.show('Password must be exactly 6 characters long', 'error');
+        return;
+      }
+      if (newPw !== confirmPw) {
+        validationMessage.textContent = 'Confirm Password does not match.';
+        Toast.show('New passwords do not match', 'error');
+        return;
+      }
+      const result = Auth.changePassword(oldPw, newPw);
+      if (!result) {
+        validationMessage.textContent = 'Current password is incorrect.';
+        Toast.show('Current password is incorrect', 'error');
+        return;
+      }
+      validationMessage.textContent = '';
+      Toast.show('Password updated successfully', 'success');
+      overlay.remove();
+    };
+  </script>
+</body>
+</html>

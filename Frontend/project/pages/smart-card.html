@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Card - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <style>
+    .smart-card {
+      max-width:420px; margin:0 auto 32px; aspect-ratio:1.6; border-radius:24px; padding:28px;
+      background:linear-gradient(135deg,#FF7A00,#E56A00),url('https://images.pexels.com/photos/4253302/pexels-photo-4253302.jpeg?auto=compress&cs=tinysrgb&w=600');
+      background-blend-mode:overlay; background-size:cover; color:#fff;
+      box-shadow:0 20px 50px rgba(255,122,0,0.35); position:relative; overflow:hidden;
+      display:flex; flex-direction:column; justify-content:space-between;
+      animation:float 4s ease-in-out infinite;
+    }
+    .smart-card::after {
+      content:''; position:absolute; top:-50%; right:-30%; width:200px; height:200px;
+      border-radius:50%; background:rgba(255,255,255,0.1);
+    }
+    .card-top { display:flex; justify-content:space-between; align-items:start; }
+    .card-chip { width:48px; height:36px; border-radius:8px; background:linear-gradient(135deg,#FFD700,#FFA500); }
+    .card-balance { font-size:2.5rem; font-weight:700; }
+    .card-bottom { display:flex; justify-content:space-between; align-items:end; }
+    .card-number { letter-spacing:3px; font-size:1.1rem; font-weight:500; }
+    .tx-row { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--ink-200); }
+    .tx-row:last-child { border-bottom:none; }
+    .tx-icon { width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script>
+    initDashboard('smartcard');
+    const content = document.getElementById('pageContent');
+    const user = Auth.getUser() || { name: 'Student', enrollment: 'EN2026001' };
+
+    const transactions = [
+      { desc: 'Canteen Purchase', sub: 'Veg Thali, Tea', amount: -114, icon: 'fa-utensils', bg: 'rgba(231,76,60,0.15)' },
+      { desc: 'Recharge', sub: 'via UPI', amount: 500, icon: 'fa-money-bill-wave', bg: 'rgba(46,204,113,0.15)' },
+      { desc: 'Canteen Purchase', sub: 'Samosa, Coffee', amount: -110, icon: 'fa-utensils', bg: 'rgba(231,76,60,0.15)' },
+      { desc: 'Recharge', sub: 'via Smart Card', amount: 200, icon: 'fa-money-bill-wave', bg: 'rgba(46,204,113,0.15)' }
+    ];
+
+    content.innerHTML = `
+      <div class="page-header">
+        <h1 class="page-title">Smart Card <i class="fa-solid fa-credit-card"></i></h1>
+        <p class="page-subtitle">Your virtual campus dining card</p>
+      </div>
+
+      <div class="smart-card">
+        <div class="card-top">
+          <div><div style="font-size:13px;opacity:0.85;">Smart Canteen</div><div style="font-weight:600;">Campus Card</div></div>
+          <div class="card-chip"></div>
+        </div>
+        <div>
+          <div style="font-size:13px;opacity:0.85;">Available Balance</div>
+          <div class="card-balance">₹500</div>
+        </div>
+        <div class="card-bottom">
+          <div><div style="font-size:11px;opacity:0.7;">Card Holder</div><div style="font-weight:600;">${user.name}</div></div>
+          <div class="card-number">•••• 4271</div>
+        </div>
+      </div>
+
+      <div style="text-align:center;margin-bottom:24px;">
+        <button class="btn btn-primary btn-lg" id="rechargeBtn"><i class="fa-solid fa-money-bill-wave"></i> Recharge Card</button>
+      </div>
+
+      <div class="list-card" style="padding:0 20px;">
+        <h3 style="padding:20px 0 8px;">Transaction History</h3>
+        ${transactions.map(t => `
+          <div class="tx-row">
+            <div style="display:flex;gap:12px;align-items:center;">
+              <div class="tx-icon" style="background:${t.bg};"><i class="fa-solid ${t.icon}"></i></div>
+              <div><div style="font-weight:600;">${t.desc}</div><div class="text-muted text-sm">${t.sub}</div></div>
+            </div>
+            <div style="font-weight:700;color:${t.amount > 0 ? 'var(--success)' : 'var(--ink-800)'};">
+              ${t.amount > 0 ? '+' : ''}${formatINR(t.amount)}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    document.getElementById('rechargeBtn').onclick = () => {
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:16px;">Recharge Smart Card</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+          ${[100, 200, 500, 1000].map(a => `<button class="btn btn-ghost" onclick="document.getElementById('rechargeAmt').value='${a}'">${formatINR(a)}</button>`).join('')}
+        </div>
+        <div class="field"><label>Custom Amount</label><input class="input" id="rechargeAmt" type="number" placeholder="Enter amount" value="500" /></div>
+        <button class="btn btn-primary btn-block" onclick="Toast.show('Recharge successful!','success');this.closest('.modal-overlay').remove();">Recharge Now</button>
+      `);
+    };
+  </script>
+</body>
+</html>

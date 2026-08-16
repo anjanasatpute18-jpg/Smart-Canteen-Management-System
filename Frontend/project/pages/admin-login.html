@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/auth.css" />
+</head>
+<body>
+  <div class="auth-page" style="background:linear-gradient(135deg,#2D2D2D,#1A1A1A),url('https://images.pexels.com/photos/262978/pexels-photo-262978.jpeg?auto=compress&cs=tinysrgb&w=1600');background-size:cover;background-blend-mode:overlay;">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="mark" style="background:linear-gradient(135deg,#FF7A00,#FF9A3C);"><i class="fa-solid fa-shield-halved"></i></div>
+        <h1>Admin Portal</h1>
+        <p>Sign in to manage the canteen</p>
+      </div>
+
+      <form id="adminForm" novalidate>
+        <div class="field">
+          <label>Admin ID</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-id-card"></i></span>
+            <input class="input" id="adminId" placeholder="Enter Admin ID" />
+          </div>
+          <div class="field-error" id="err-adminId"></div>
+        </div>
+
+        <div class="field">
+          <label>Email</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-envelope"></i></span>
+            <input class="input" id="email" type="email" placeholder="admin@smartcanteen.edu" />
+          </div>
+          <div class="field-error" id="err-email"></div>
+        </div>
+
+        <div class="field">
+          <label>Password</label>
+          <div class="input-group">
+            <span class="icon"><i class="fa-solid fa-lock"></i></span>
+            <input class="input" id="password" type="password" placeholder="Enter password" />
+          </div>
+          <div class="field-error" id="err-password"></div>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-lg">Admin Login</button>
+      </form>
+      <script>
+document.getElementById("adminForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const adminId = document.getElementById("adminId").value.trim();
+    const password = document.getElementById("password").value;
+
+    try {
+        const response = await fetch("http://127.0.0.1:5000/api/admin/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                admin_id: adminId,
+                password: password
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.status === "success") {
+
+            window.location.href = "admin-dashboard.html";
+        } else {
+           Toast.show(result.message || "Invalid admin credentials", "error", 2000); 
+        }
+
+    } catch (error) {
+        console.error("ADMIN LOGIN ERROR:", error);
+        Toast.show("Cannot connect to backend. Please start Flask server.", "error", 2000);
+    }
+});
+</script>
+
+      <div class="auth-footer">
+        <a href="login.html">← Student Login</a> &nbsp;|&nbsp;
+        <a href="#" id="adminForgotLink">Forgot Password?</a>
+      </div>
+      <div class="auth-footer" style="margin-top:8px;">
+        <a href="../index.html">Home</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/app.js"></script>
+  <script>
+    // Admin credentials (stored safely) - updated per admin details
+    const ADMIN_CREDENTIALS = {
+      email: 'janvisatpute378@gmail.com',
+      password: 'pass@378'
+    };
+
+    // Prefill admin id and email for convenience
+    document.getElementById('adminId').value = 'Janvi Satpute';
+    document.getElementById('email').value = ADMIN_CREDENTIALS.email;
+
+    const form = document.getElementById('adminForm');
+    function setError(id, msg) {
+      document.getElementById('err-' + id).textContent = msg || '';
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = document.getElementById('adminId').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const pw = document.getElementById('password').value;
+      ['adminId','email','password'].forEach(f => setError(f, ''));
+
+      let valid = true;
+      if (!id) { setError('adminId', 'Admin ID is required'); valid = false; }
+      if (!validateEmail(email)) { setError('email', 'Enter a valid email'); valid = false; }
+      if (pw.length < 1) { setError('password', 'Password is required'); valid = false; }
+      if (!valid) return;
+
+      // Verify admin credentials
+      const adminRecord = Auth.getAdminRecord(email) || {
+        email: ADMIN_CREDENTIALS.email,
+        passwordHash: btoa(ADMIN_CREDENTIALS.password),
+        adminId: id,
+        name: 'Administrator',
+        role: 'admin',
+        isAdmin: true
+      };
+
+      
+
+      Auth.login({ 
+        name: adminRecord.name || 'Administrator', 
+        adminId: adminRecord.adminId || id, 
+        email, 
+        role: 'admin',
+        isAdmin: true,
+        password: pw
+      });
+      Toast.show('✓ Welcome, Admin!', 'success');
+      setTimeout(() => location.href = 'admin-dashboard.html', 1000);
+    });
+
+    document.getElementById('adminForgotLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:12px;">Reset Admin Password</h3>
+        <div class="field"><label>Email</label><input class="input" id="adminResetEmail" type="email" placeholder="Your admin email" /></div>
+        <button class="btn btn-primary btn-block" id="sendAdminOtpBtn">Send OTP</button>
+        <div id="adminResetFlow" style="display:none;margin-top:16px;">
+          <div class="field"><label>OTP</label><input class="input" id="adminResetOtp" placeholder="Enter OTP" maxlength="6" /></div>
+          <div class="field"><label>New Password</label><input class="input" id="adminResetPassword" type="password" placeholder="6 char password" maxlength="6" /></div>
+          <div class="field"><label>Confirm Password</label><input class="input" id="adminResetConfirm" type="password" placeholder="Confirm password" maxlength="6" /></div>
+          <div id="adminResetValidation" style="color:var(--error);font-size:0.9rem;min-height:20px;margin-bottom:12px;"></div>
+          <button class="btn btn-primary btn-block" id="verifyAdminResetBtn">Update Password</button>
+        </div>
+      `);
+
+      const sendAdminOtpBtn = document.getElementById('sendAdminOtpBtn');
+      const adminResetFlow = document.getElementById('adminResetFlow');
+      const adminResetEmail = document.getElementById('adminResetEmail');
+      const adminResetOtp = document.getElementById('adminResetOtp');
+      const adminResetPassword = document.getElementById('adminResetPassword');
+      const adminResetConfirm = document.getElementById('adminResetConfirm');
+      const adminResetValidation = document.getElementById('adminResetValidation');
+      const verifyAdminResetBtn = document.getElementById('verifyAdminResetBtn');
+      let otpSentTo = null;
+
+      function validateAdminResetInputs() {
+        adminResetValidation.textContent = '';
+        const pass = adminResetPassword.value;
+        const confirm = adminResetConfirm.value;
+        if (pass.length !== 6) {
+          adminResetValidation.textContent = 'Password must be exactly 6 characters.';
+          verifyAdminResetBtn.disabled = true;
+          return false;
+        }
+        if (confirm && pass !== confirm) {
+          adminResetValidation.textContent = 'Passwords do not match.';
+          verifyAdminResetBtn.disabled = true;
+          return false;
+        }
+        adminResetValidation.textContent = '';
+        verifyAdminResetBtn.disabled = false;
+        return true;
+      }
+
+      sendAdminOtpBtn.addEventListener('click', () => {
+        const email = adminResetEmail.value.trim();
+        if (!validateEmail(email)) {
+          Toast.show('Enter a valid admin email', 'error');
+          return;
+        }
+        const payload = Auth.sendResetOTP(email);
+        if (!payload) {
+          Toast.show('Admin email not found.', 'error');
+          return;
+        }
+        otpSentTo = email;
+        Toast.show('OTP sent to admin email (simulated).', 'success');
+        adminResetFlow.style.display = 'block';
+      });
+
+      [adminResetPassword, adminResetConfirm].forEach(input => {
+        input.addEventListener('input', validateAdminResetInputs);
+      });
+
+      verifyAdminResetBtn.addEventListener('click', () => {
+        const email = otpSentTo || adminResetEmail.value.trim();
+        const otp = adminResetOtp.value.trim();
+        const newPass = adminResetPassword.value;
+        const confirm = adminResetConfirm.value;
+
+        if (!otp || !newPass || !confirm) {
+          adminResetValidation.textContent = 'Fill all reset fields.';
+          return;
+        }
+        if (!validateAdminResetInputs()) return;
+        const success = Auth.resetPasswordByEmail(email, otp, newPass);
+        if (!success) {
+          adminResetValidation.textContent = 'OTP invalid or expired. Please retry.';
+          Toast.show('OTP validation failed.', 'error');
+          return;
+        }
+        Toast.show('Admin password updated successfully. Please login.', 'success');
+        overlay.remove();
+      });
+    });
+  </script>
+</body>
+</html>

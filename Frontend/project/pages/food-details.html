@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Food Details - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <style>
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:32px; align-items:start; }
+    .detail-img { border-radius:20px; overflow:hidden; box-shadow:var(--shadow-lg); aspect-ratio:1; }
+    .detail-img img { width:100%; height:100%; object-fit:cover; }
+    .detail-info h1 { font-size:2rem; margin-bottom:8px; }
+    .detail-price { font-size:1.75rem; font-weight:700; color:var(--primary); margin:12px 0; }
+    .detail-desc { color:var(--ink-600); margin-bottom:20px; line-height:1.6; }
+    .ingredients-list { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:24px; }
+    .ingredient-chip { background:var(--primary-soft); color:var(--primary-dark); padding:6px 14px; border-radius:999px; font-size:13px; font-weight:500; }
+    .qty-row { display:flex; align-items:center; gap:16px; margin-bottom:24px; }
+    .qty-row label { font-weight:600; }
+    @media (max-width:768px){ .detail-grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script>
+    initDashboard('menu');
+    const id = getQueryParam('id');
+    const item = findFood(id) || MENU_ITEMS[0];
+    const content = document.getElementById('pageContent');
+    let qty = 1;
+
+    content.innerHTML = `
+      <button class="btn btn-ghost btn-sm" style="margin-bottom:16px;" onclick="history.back()">← Back</button>
+      <div class="detail-grid">
+        <div class="detail-img" style="background:var(--accent);">
+          <img src="${item.img}" alt="${item.name}" loading="lazy" onerror="this.style.display='none';" />
+        </div>
+        <div class="detail-info">
+          <span class="badge badge-primary">${item.category}</span>
+          <h1 style="margin-top:12px;">${item.name}</h1>
+          <div class="food-rating" style="font-size:1rem;">
+            <span class="stars">${starsHTML(item.rating)}</span>
+            <span style="color:var(--ink-600);">${item.rating} / 5.0</span>
+          </div>
+          <div class="detail-price">${formatINR(item.price)}</div>
+          <p class="detail-desc">${item.desc}</p>
+
+          <h3 style="font-size:1.1rem;margin-bottom:12px;">Ingredients</h3>
+          <div class="ingredients-list">
+            ${item.ingredients.map(i => `<span class="ingredient-chip">${i}</span>`).join('')}
+          </div>
+
+          <div class="qty-row">
+            <label>Quantity</label>
+            <div class="qty-control">
+              <button class="qty-btn" id="decBtn">−</button>
+              <span class="qty-value" id="qtyVal">1</span>
+              <button class="qty-btn" id="incBtn">+</button>
+            </div>
+            <span style="color:var(--ink-600);">Total: <strong id="totalPrice" style="color:var(--primary);">${formatINR(item.price)}</strong></span>
+          </div>
+
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-lg" onclick="location.href='cart.html'">Go to Cart</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    function updateTotal() {
+      document.getElementById('qtyVal').textContent = qty;
+      document.getElementById('totalPrice').textContent = formatINR(item.price * qty);
+    }
+
+    document.getElementById('incBtn').onclick = () => { qty++; updateTotal(); };
+    document.getElementById('decBtn').onclick = () => { qty = Math.max(1, qty - 1); updateTotal(); };
+    document.getElementById('addCartBtn').onclick = () => {
+      Cart.add({ id: item.id, name: item.name, price: item.price, img: item.img }, qty);
+    };
+  </script>
+</body>
+</html>

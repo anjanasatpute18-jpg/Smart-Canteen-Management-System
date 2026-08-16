@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Scanner - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <style>
+    .scanner-wrap { max-width:480px; margin:0 auto; text-align:center; }
+    .scanner-frame {
+      position:relative; width:100%; aspect-ratio:1; max-width:360px; margin:0 auto 24px;
+      border-radius:24px; overflow:hidden; background:#1a1a1a;
+      box-shadow:var(--shadow-lg);
+    }
+    .scanner-video {
+      width:100%; height:100%; object-fit:cover; background:#000; display:block;
+    }
+    .scanner-canvas {
+      display:none;
+    }
+    .scanner-bg {
+      width:100%; height:100%; object-fit:cover; opacity:0.5;
+    }
+    .scan-overlay {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    }
+    .scan-box {
+      width:220px; height:220px; border:3px solid var(--primary); border-radius:16px;
+      position:relative;
+    }
+    .scan-box::before, .scan-box::after,
+    .scan-box .c1, .scan-box .c2 {
+      content:''; position:absolute; width:32px; height:32px; border:4px solid var(--primary);
+    }
+    .scan-box::before { top:-4px; left:-4px; border-right:none; border-bottom:none; border-radius:8px 0 0 0; }
+    .scan-box::after { top:-4px; right:-4px; border-left:none; border-bottom:none; border-radius:0 8px 0 0; }
+    .scan-box .c1 { bottom:-4px; left:-4px; border-right:none; border-top:none; border-radius:0 0 0 8px; }
+    .scan-box .c2 { bottom:-4px; right:-4px; border-left:none; border-top:none; border-radius:0 0 8px 0; }
+    .scan-line {
+      position:absolute; left:0; right:0; height:3px; background:linear-gradient(90deg,transparent,var(--primary),transparent);
+      animation:scanMove 2s ease-in-out infinite; box-shadow:0 0 12px var(--primary);
+    }
+    @keyframes scanMove { 0%,100%{top:10%;} 50%{top:90%;} }
+    .scanner-controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    .bill-card {
+      background:var(--bg-2); border-radius:16px; padding:24px; margin-top:24px;
+      border:2px solid var(--primary);
+    }
+    .bill-item {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:12px 0; border-bottom:1px solid var(--border);
+    }
+    .bill-item:last-child { border-bottom:none; }
+    .bill-total {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:16px 0; font-size:18px; font-weight:600; color:var(--primary);
+    }
+    .qr-input { width:100%; padding:12px; border:2px solid var(--border); border-radius:8px; font-size:16px; }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script>
+    initDashboard('scan');
+    const content = document.getElementById('pageContent');
+    let stream = null;
+    let flashOn = false;
+    let scanningMode = 'food'; // 'food' or 'payment'
+    let tempBill = Store.get('tempBill') || { items: [], total: 0 };
+
+    function renderScanner() {
+      if (scanningMode === 'food') {
+        content.innerHTML = `
+          <div class="page-header text-center">
+            <h1 class="page-title">Scan Food QR <i class="fa-solid fa-qrcode"></i></h1>
+            <p class="page-subtitle">Point camera at food QR to add items to bill</p>
+          </div>
+          <div class="scanner-wrap">
+            <div class="scanner-frame">
+              <video id="scannerVideo" class="scanner-video" autoplay playsinline muted></video>
+              <canvas id="scannerCanvas" class="scanner-canvas"></canvas>
+              <img id="scannerFallback" class="scanner-bg" src="https://images.pexels.com/photos/4253302/pexels-photo-4253302.jpeg?auto=compress&cs=tinysrgb&w=600" alt="Camera" />
+              <div class="scan-overlay">
+                <div class="scan-box">
+                  <span class="c1"></span><span class="c2"></span>
+                  <div class="scan-line"></div>
+                </div>
+              </div>
+            </div>
+            <p class="text-muted" style="margin-bottom:20px;">Food ID Format: FOOD{1-21} (e.g., FOOD1, FOOD5)</p>
+            <div class="scanner-controls">
+              <button class="btn btn-primary btn-lg" id="startScanBtn"><i class="fa-solid fa-qrcode"></i> Start Scanning</button>
+              <button class="btn btn-ghost btn-lg" id="flashBtn"><i class="fa-solid fa-bolt"></i> Flash</button>
+            </div>
+            ${tempBill.items.length > 0 ? `
+              <div class="bill-card">
+                <h3 style="margin-bottom:16px;">📋 Current Bill</h3>
+                ${tempBill.items.map(item => `
+                  <div class="bill-item">
+                    <span>${item.name} <strong>x${item.qty}</strong></span>
+                    <span style="color:var(--primary); font-weight:600;">${formatINR(item.price * item.qty)}</span>
+                  </div>
+                `).join('')}
+                <div class="bill-total">
+                  <span>Total:</span>
+                  <span>${formatINR(tempBill.total)}</span>
+                </div>
+                <div style="display:flex; gap:12px; margin-top:16px;">
+                  <button class="btn btn-primary btn-lg" style="flex:1;" onclick="goToPayment()"><i class="fa-solid fa-credit-card"></i> Go to Payment</button>
+                  <button class="btn btn-outline btn-lg" onclick="resetBill()">Clear Bill</button>
+                </div>
+              </div>
+            ` : ''}
+            <input type="file" id="fileInput" accept="image/*" style="display:none;" />
+          </div>
+        `;
+        attachScannerEvents();
+      }
+    }
+
+    function attachScannerEvents() {
+      const scanBtn = document.getElementById('startScanBtn');
+      const flashBtn = document.getElementById('flashBtn');
+      const fileInput = document.getElementById('fileInput');
+
+      if (scanBtn) scanBtn.onclick = () => startScanning();
+      if (flashBtn) flashBtn.onclick = () => toggleFlash();
+      if (fileInput) fileInput.onchange = (e) => processUploadedImage(e);
+    }
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        const video = document.getElementById('scannerVideo');
+        const fallback = document.getElementById('scannerFallback');
+        if (video && fallback) {
+          video.srcObject = stream;
+          video.play().catch(() => {});
+          fallback.style.display = 'none';
+        }
+      } catch (err) {
+        Toast.show('Camera unavailable. Use manual ID input.', 'info', 2200);
+      }
+    }
+
+    async function startScanning() {
+      await startCamera();
+      Toast.show('Scanning for QR codes...', 'info', 1800);
+      const video = document.getElementById('scannerVideo');
+      const canvas = document.getElementById('scannerCanvas');
+      
+      if (!video || !canvas) return;
+      
+      const ctx = canvas.getContext('2d');
+      let scanning = true;
+
+      const scanInterval = setInterval(() => {
+        if (!scanning || !stream) {
+          clearInterval(scanInterval);
+          return;
+        }
+        
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        if (canvas.width && canvas.height) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, canvas.width, canvas.height);
+          
+          if (code) {
+            scanning = false;
+            clearInterval(scanInterval);
+            processQRData(code.data);
+          }
+        }
+      }, 500);
+
+      setTimeout(() => {
+        if (scanning) {
+          clearInterval(scanInterval);
+          Toast.show('No QR detected. Try manual entry.', 'info', 1500);
+        }
+      }, 8000);
+    }
+
+    function processQRData(data) {
+      // Expected format: FOOD{id} or just {id}
+      const foodMatch = data.match(/FOOD(\d+)|^(\d+)$/i);
+      if (foodMatch) {
+        const foodId = parseInt(foodMatch[1] || foodMatch[2]);
+        addFoodToBill(foodId);
+      } else if (data.startsWith('PAY_')) {
+        // Admin payment verification
+        handlePaymentScan(data);
+      } else {
+        Toast.show('Invalid QR format', 'error', 1500);
+      }
+    }
+
+    function addFoodToBill(foodId) {
+      const food = MENU_ITEMS.find(f => f.id === foodId);
+      if (!food) {
+        Toast.show(`Food ID ${foodId} not found`, 'error', 1500);
+        return;
+      }
+
+      const existingItem = tempBill.items.find(item => item.id === foodId);
+      if (existingItem) {
+        existingItem.qty += 1;
+      } else {
+        tempBill.items.push({
+          id: food.id,
+          name: food.name,
+          price: food.price,
+          img: food.img,
+          qty: 1
+        });
+      }
+
+      tempBill.total = tempBill.items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      Store.set('tempBill', tempBill);
+      
+      Toast.show(`✓ ${food.name} added! Total: ${formatINR(tempBill.total)}`, 'success', 1800);
+      renderScanner();
+    }
+
+    function goToPayment() {
+      if (tempBill.items.length === 0) {
+        Toast.show('Add items first', 'error', 1500);
+        return;
+      }
+      Store.set('tempBill', tempBill);
+      location.href = 'upi-payment.html';
+    }
+
+    function resetBill() {
+      tempBill = { items: [], total: 0 };
+      Store.set('tempBill', tempBill);
+      Toast.show('Bill cleared', 'info', 1200);
+      renderScanner();
+    }
+
+    async function toggleFlash() {
+      if (!stream) {
+        Toast.show('Camera not active', 'info', 1500);
+        return;
+      }
+
+      try {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (!videoTrack) return;
+
+        const capabilities = videoTrack.getCapabilities?.();
+        const settings = videoTrack.getSettings?.();
+        const supportsTorch = capabilities && 'torch' in capabilities;
+
+        if (!supportsTorch && !('torch' in (settings || {}))) {
+          Toast.show('Flash is not supported on this device.', 'info', 1800);
+          return;
+        }
+
+        flashOn = !flashOn;
+        await videoTrack.applyConstraints({ advanced: [{ torch: flashOn }] });
+        const flashBtn = document.getElementById('flashBtn');
+        if (flashBtn) {
+          flashBtn.style.background = flashOn ? 'var(--primary)' : '';
+          flashBtn.style.color = flashOn ? '#fff' : '';
+        }
+        Toast.show(flashOn ? 'Flash ON' : 'Flash OFF', 'info', 1500);
+      } catch (err) {
+        Toast.show('Unable to toggle flash.', 'info', 1800);
+      }
+    }
+
+    function processUploadedImage(e) {
+      if (e.target.files[0]) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext('2d').drawImage(img, 0, 0);
+            const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, canvas.width, canvas.height);
+            if (code) {
+              Toast.show('QR detected!', 'success', 1200);
+              processQRData(code.data);
+            } else {
+              Toast.show('No QR code found in image', 'error', 1500);
+            }
+          };
+          img.src = evt.target.result;
+        };
+        reader.readAsDataURL(e.target.files[0]);
+      }
+    }
+
+    function handlePaymentScan(paymentData) {
+      // Admin verifies payment
+      Toast.show('✓ Payment verified by admin!', 'success', 1800);
+      setTimeout(() => {
+        Cart.items = tempBill.items;
+        Cart.save();
+        Store.set('tempBill', null);
+        location.href = 'order-history.html';
+      }, 1500);
+    }
+
+    // Initialize
+    renderScanner();
+  </script>
+</body>
+</html>

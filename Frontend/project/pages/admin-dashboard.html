@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <style>
+    .admin-sidebar .nav-item.active { background:linear-gradient(135deg,#2D2D2D,#1A1A1A); box-shadow:0 8px 20px rgba(0,0,0,0.2); }
+    .admin-table { width:100%; border-collapse:collapse; }
+    .admin-table th { text-align:left; padding:14px 16px; font-size:13px; color:var(--ink-500); text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid var(--ink-200); }
+    .admin-table td { padding:14px 16px; border-bottom:1px solid var(--ink-200); }
+    .admin-table tr:hover td { background:var(--accent); }
+    .row-thumb { width:40px; height:40px; border-radius:10px; object-fit:cover; }
+    .action-btn { padding:6px 10px; border-radius:8px; font-size:13px; font-weight:600; }
+    .analytics-range { display:flex; gap:8px; flex-wrap:wrap; }
+    .range-btn { border:1px solid var(--ink-200); background:#fff; color:var(--ink-700); border-radius:999px; padding:7px 12px; font-size:13px; font-weight:600; cursor:pointer; }
+    .range-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+    .analytics-summary { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; margin-bottom:18px; }
+    .stat-grid { grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
+    .stat-card { min-height:126px; border:1px solid rgba(0,0,0,.05); box-shadow:0 10px 24px rgba(15,23,42,.06); }
+    .analytics-card-mini { padding:16px; border-radius:16px; background:linear-gradient(135deg, var(--secondary), #fff); border:1px solid var(--ink-200); }
+    .analytics-card-mini .label { font-size:12px; color:var(--ink-500); text-transform:uppercase; letter-spacing:1px; }
+    .analytics-card-mini .value { font-size:1.4rem; font-weight:700; color:var(--ink-900); margin-top:6px; }
+    .analytics-grid { display:grid; grid-template-columns:1.4fr 0.9fr; gap:20px; align-items:start; }
+    .chart-wrap { min-height:300px; padding:10px 0; }
+    .top-items-list { display:grid; gap:10px; }
+    .top-item-row { display:grid; grid-template-columns:90px 1fr 38px; gap:10px; align-items:center; }
+    .top-item-row .bar { height:8px; border-radius:999px; background:var(--ink-200); overflow:hidden; }
+    .top-item-row .bar > span { display:block; height:100%; background:linear-gradient(90deg, var(--primary), var(--warning)); border-radius:999px; }
+    .admin-profile-chip { display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid var(--ink-200); border-radius:999px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,.06); cursor:pointer; transition:transform .2s ease, box-shadow .2s ease; }
+    .admin-profile-chip:hover { transform:translateY(-1px); box-shadow:0 10px 24px rgba(0,0,0,.12); }
+    .admin-profile-meta { display:flex; flex-direction:column; line-height:1.2; }
+    .admin-profile-name { font-size:13px; font-weight:700; color:var(--ink-900); }
+    .admin-profile-role { font-size:11px; color:var(--ink-500); }
+    @media (max-width:900px){ .analytics-summary{grid-template-columns:1fr;} .analytics-grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script>
+    if (!Auth.guardAdmin()) throw new Error('admin only');
+    const user = Auth.getUser();
+    const avatarSrc = (typeof createGenderAvatar === 'function') ? createGenderAvatar(user?.gender) : 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=200';
+
+    function handleAdminLogout() {
+      Store.remove('scms_user');
+      Store.remove('scms_admin_profile');
+      Store.remove('scms_admin_notifications');
+      Auth.recordLoginEvent({ type: 'logout', role: 'admin', email: user?.email || 'admin@edu.in', message: 'Admin signed out.' });
+      window.location.href = 'admin-login.html';
+    }
+
+    document.body.innerHTML = `
+      <div class="app">
+        <aside class="sidebar admin-sidebar" id="sidebar">
+          <div class="sidebar-header">
+            <div class="sidebar-logo" style="background:linear-gradient(135deg,#2D2D2D,#1A1A1A);"><i class="fa-solid fa-shield-halved"></i></div>
+            <div class="sidebar-title">Admin Panel<small>Smart Canteen</small></div>
+          </div>
+          <nav class="sidebar-nav">
+            <div class="nav-section-label">Management</div>
+            <a class="nav-item active" href="#" data-section="dashboard"><span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span><span>Dashboard</span></a>
+            <a class="nav-item" href="#" data-section="menu"><span class="nav-icon"><i class="fa-solid fa-utensils"></i></span><span>Manage Menu</span></a>
+            <a class="nav-item" href="#" data-section="students"><span class="nav-icon"><i class="fa-solid fa-users"></i></span><span>Manage Students</span></a>
+            <a class="nav-item" href="#" data-section="orders"><span class="nav-icon"><i class="fa-solid fa-box"></i></span><span>View Orders</span></a>
+            <a class="nav-item" href="#" data-section="reports"><span class="nav-icon"><i class="fa-solid fa-money-bill-wave"></i></span><span>Payment Reports</span></a>
+            <a class="nav-item" href="#" data-section="qr"><span class="nav-icon"><i class="fa-solid fa-qrcode"></i></span><span>QR Management</span></a>
+          </nav>
+          <div style="padding:16px;">
+            <a class="nav-item" href="#" onclick="handleAdminLogout()" style="color:var(--error);"><span class="nav-icon"><i class="fa-solid fa-right-from-bracket"></i></span><span>Logout</span></a>
+          </div>
+        </aside>
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+        <div class="main">
+          <header class="navbar">
+            <button class="menu-toggle" id="menuToggle"><i class="fa-solid fa-bars"></i></button>
+            <div class="navbar-search"><span class="icon"><i class="fa-solid fa-magnifying-glass"></i></span><input class="input" id="adminSearchInput" placeholder="Search..." /></div>
+            <div class="navbar-actions">
+              <button class="icon-btn" title="Notifications" id="notificationBtn"><i class="fa-solid fa-bell"></i><span class="dot" id="adminNotificationCountDot"></span></button>
+              <div class="admin-profile-chip" id="adminProfileBtn" title="Admin Profile" onclick="location.href='profile.html'">
+                <img class="avatar" src="${avatarSrc}" alt="Admin" />
+                <div class="admin-profile-meta">
+                  <div class="admin-profile-name">${user?.name || 'Admin User'}</div>
+                  <div class="admin-profile-role">Administrator</div>
+                </div>
+              </div>
+            </div>
+          </header>
+          <main class="page" id="pageContent"></main>
+        </div>
+      </div>
+    `;
+
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    document.getElementById('menuToggle').onclick = () => { sidebar.classList.add('open'); backdrop.classList.add('open'); };
+    backdrop.onclick = () => { sidebar.classList.remove('open'); backdrop.classList.remove('open'); };
+
+    Notifications.ensureSeed('admin');
+    Notifications.renderBell('admin');
+    Notifications.runSimulation('admin');
+
+    document.getElementById('notificationBtn')?.addEventListener('click', () => {
+      Notifications.openModal('admin');
+    });
+
+    const content = document.getElementById('pageContent');
+    const orders = [
+      { id: 'ORD101', student: 'Rahul', items: 'Tea, Poha', amount: 80, status: 'Ready' },
+      { id: 'ORD102', student: 'Aarav', items: 'Veg Thali, Tea', amount: 114, status: 'Preparing' },
+      { id: 'ORD103', student: 'Priya', items: 'Pav Bhaji', amount: 100, status: 'Completed' },
+      { id: 'ORD104', student: 'Sneha', items: 'Coffee', amount: 140, status: 'Cancelled' }
+    ];
+    const payments = [
+      { id: 'PAY101', student: 'Rahul', amount: 120, method: 'UPI', status: 'Paid', date: '06-07-2026' },
+      { id: 'PAY102', student: 'Sneha', amount: 180, method: 'Cash', status: 'Paid', date: '06-07-2026' },
+      { id: 'PAY103', student: 'Aarav', amount: 95, method: 'UPI', status: 'Pending', date: '06-07-2026' },
+      { id: 'PAY104', student: 'Priya', amount: 220, method: 'Cash', status: 'Paid', date: '06-07-2026' }
+    ];
+    const qrRecords = [
+      { id: 'QR-001', student: 'Rahul', type: 'Student QR', code: 'STU-RAHUL-101', status: 'Active', generatedAt: '06-07-2026 09:10' },
+      { id: 'QR-002', student: 'Sneha', type: 'Payment QR', code: 'PAY-UPI-120', status: 'Used', generatedAt: '06-07-2026 10:20' },
+      { id: 'QR-003', student: 'Aarav', type: 'Student QR', code: 'STU-AARAV-102', status: 'Active', generatedAt: '06-07-2026 11:40' }
+    ];
+    const qrScanHistory = [
+      { id: 'SCAN-001', student: 'Rahul', item: 'Veg Thali', time: '09:12', location: 'Counter 1' },
+      { id: 'SCAN-002', student: 'Sneha', item: 'Coffee', time: '10:25', location: 'Counter 2' },
+      { id: 'SCAN-003', student: 'Aarav', item: 'Pav Bhaji', time: '11:42', location: 'Counter 3' }
+    ];
+
+    let analyticsChart = null;
+    let analyticsRange = 'daily';
+    let analyticsHistoryDate = (() => {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    })();
+    let activeSection = 'dashboard';
+    let searchTerm = '';
+
+    function escapeHtml(value = '') {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+   async function getAnalyticsOrders() {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/api/admin/orders');
+
+    if (!response.ok) {
+      throw new Error('Failed to load analytics orders');
+    }
+
+    const backendOrders = await response.json();
+
+    return backendOrders.map(order => ({
+      id: order.order_id,
+      createdAt: order.order_time,
+      amount: Number(order.total_amount || 0),
+      items: [{
+        name: order.food_name,
+        qty: Number(order.quantity || 0),
+        price: Number(order.price || 0)
+      }]
+    }));
+
+  } catch (error) {
+    console.error('Analytics Orders Error:', error);
+    return [];
+  }
+}
+    
+
+    function parseOrderDate(value) {
+      if (!value) return new Date();
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    }
+
+    function getAnalyticsData(range = analyticsRange, historyDate = analyticsHistoryDate) {
+      const ordersList =  getAnalyticsOrders();
+      const now = new Date();
+      const labels = [];
+      const sales = [];
+      const income = [];
+      let bucketOrders = [];
+      let periodLabel = 'Today';
+
+      const getBucketOrdersForDate = (targetDate) => {
+        const start = new Date(targetDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(targetDate);
+        end.setHours(23, 59, 59, 999);
+        return ordersList.filter(order => {
+          const created = parseOrderDate(order.createdAt);
+          return created >= start && created <= end;
+        });
+      };
+
+      if (range === 'history') {
+        const selectedDate = new Date(`${historyDate || analyticsHistoryDate}T00:00:00`);
+        bucketOrders = getBucketOrdersForDate(selectedDate);
+        periodLabel = selectedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+        labels.push(selectedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }));
+        sales.push(bucketOrders.reduce((sum, order) => sum + (order.items || []).reduce((s, item) => s + Number(item.qty || 0), 0), 0));
+        income.push(bucketOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0));
+      } else {
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        bucketOrders = getBucketOrdersForDate(today);
+        periodLabel = 'Today';
+        labels.push(today.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }));
+        sales.push(bucketOrders.reduce((sum, order) => sum + (order.items || []).reduce((s, item) => s + Number(item.qty || 0), 0), 0));
+        income.push(bucketOrders.reduce((sum, order) => sum + Number(order.amount || 0), 0));
+      }
+
+      const topItems = {};
+      bucketOrders.forEach(order => {
+        (order.items || []).forEach(item => {
+          const key = item.name || 'Item';
+          topItems[key] = (topItems[key] || 0) + Number(item.qty || 0);
+        });
+      });
+
+      const sortedItems = Object.entries(topItems).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const totalItemsSold = sales.reduce((sum, value) => sum + value, 0);
+      const totalIncome = income.reduce((sum, value) => sum + value, 0);
+
+      return { labels, sales, income, topItems: sortedItems, totalItemsSold, totalIncome, records: bucketOrders, periodLabel };
+    }
+
+    function renderAnalyticsPanel(containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const data = getAnalyticsData();
+      container.innerHTML = `
+        <div class="analytics-range" style="margin-bottom:12px;">
+          <button class="range-btn ${analyticsRange === 'daily' ? 'active' : ''}" data-range="daily">Daily</button>
+          <button class="range-btn ${analyticsRange === 'history' ? 'active' : ''}" data-range="history">History</button>
+        </div>
+        ${analyticsRange === 'history' ? `
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+            <label style="font-size:13px;color:var(--ink-600);">Select date
+              <input id="historyDateInput" type="date" value="${analyticsHistoryDate}" style="margin-left:8px;padding:8px 10px;border:1px solid var(--ink-200);border-radius:10px;" />
+            </label>
+            <button class="btn btn-primary btn-sm" id="loadHistoryBtn"><i class="fa-solid fa-clock-rotate-left"></i> View Sales</button>
+          </div>
+        ` : ''}
+        <div class="text-muted" style="margin-bottom:12px;">${analyticsRange === 'history' ? `Showing sales for ${data.periodLabel}` : 'Showing sales for today'}</div>
+        <div class="analytics-summary">
+          <div class="analytics-card-mini">
+            <div class="label">Items Sold</div>
+            <div class="value">${data.totalItemsSold}</div>
+          </div>
+          <div class="analytics-card-mini">
+            <div class="label">Income</div>
+            <div class="value">${formatINR(data.totalIncome)}</div>
+          </div>
+          <div class="analytics-card-mini">
+            <div class="label">Top Item</div>
+            <div class="value">${data.topItems[0] ? data.topItems[0][0] : 'No sales yet'}</div>
+          </div>
+        </div>
+        <div class="analytics-grid">
+          <div class="chart-wrap"><canvas id="salesChart"></canvas></div>
+          <div class="list-card" style="padding:16px;">
+            <h4 style="margin-bottom:12px;">${analyticsRange === 'history' ? 'Sales Records' : 'Today\'s Sales Records'}</h4>
+            <div class="top-items-list">
+              ${data.records.length ? data.records.map(record => `
+                <div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--ink-200);">
+                  <div>
+                    <div style="font-weight:600;">${escapeHtml(record.id || 'Order')}</div>
+                    <div class="text-muted" style="font-size:12px;">${escapeHtml(record.createdAt || 'No date')}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="font-weight:700;color:var(--primary);">${formatINR(record.amount || 0)}</div>
+                    <div class="text-muted" style="font-size:12px;">${escapeHtml((record.items || []).map(item => `${item.name} × ${item.qty}`).join(', ') || 'No items')}</div>
+                  </div>
+                </div>
+              `).join('') : '<div class="text-muted">No sales were recorded for this date.</div>'}
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (analyticsChart) analyticsChart.destroy();
+      const chartCanvas = document.getElementById('salesChart');
+      if (chartCanvas) {
+        analyticsChart = new Chart(chartCanvas, {
+          type: 'bar',
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                label: 'Items Sold',
+                data: data.sales,
+                backgroundColor: 'rgba(255,122,0,0.75)',
+                borderRadius: 8,
+                maxBarThickness: 26
+              },
+              {
+                label: 'Income',
+                data: data.income,
+                type: 'line',
+                borderColor: '#2ecc71',
+                backgroundColor: 'rgba(46,204,113,0.15)',
+                tension: 0.35,
+                yAxisID: 'y1',
+                pointRadius: 4
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              y: { beginAtZero: true, ticks: { callback: value => `${value}` } },
+              y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: value => `${formatINR(value)}` } }
+            },
+            plugins: { legend: { position: 'bottom' } }
+          }
+        });
+      }
+
+      document.querySelectorAll('.range-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          analyticsRange = btn.getAttribute('data-range');
+          document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b === btn));
+          renderAnalyticsPanel(containerId);
+        });
+      });
+
+      const historyDateInput = document.getElementById('historyDateInput');
+      const loadHistoryBtn = document.getElementById('loadHistoryBtn');
+
+      if (historyDateInput) {
+        historyDateInput.addEventListener('change', event => {
+          analyticsHistoryDate = event.target.value || analyticsHistoryDate;
+        });
+      }
+
+      if (loadHistoryBtn) {
+        loadHistoryBtn.addEventListener('click', () => {
+          analyticsRange = 'history';
+          document.querySelectorAll('.range-btn').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-range') === 'history'));
+          renderAnalyticsPanel(containerId);
+        });
+      }
+    }
+
+    function bindSearchInput() {
+      const input = document.getElementById('adminSearchInput');
+      if (!input) return;
+      input.value = searchTerm;
+      input.oninput = (event) => {
+        searchTerm = (event.target.value || '').trim().toLowerCase();
+        setActiveSection(activeSection);
+      };
+    }
+
+    function getDashboardStats() {
+      const menuItems = Menu.getAll();
+      Orders.syncFromStorage();
+      const ordersList = Orders.all();
+      const totalOrders = ordersList.length;
+    
+      const revenue = ordersList
+        .filter(order => {
+          const status = String(order.status || '').toLowerCase();
+          const paymentStatus = String(order.paymentStatus || '').toLowerCase();
+          return status !== 'cancelled' && paymentStatus !== 'pending' && paymentStatus !== 'unpaid' && paymentStatus !== 'failed';
+        })
+        .reduce((sum, order) => sum + Number(order.amount || 0), 0);
+
+      return {
+        menuCount: menuItems.length,
+        totalOrders,
+        revenue
+      };
+    }
+
+    function refreshDashboardIfVisible() {
+      if (activeSection !== 'dashboard') return;
+      renderDashboardSection();
+    }
+
+    function renderDashboardSection() {
+      const stats = getDashboardStats();
+      loadAdminDashboardStats();
+      content.innerHTML = `
+        <div class="page-header">
+          <h1 class="page-title">Admin Dashboard <i class="fa-solid fa-chart-line"></i></h1>
+          <p class="page-subtitle">Welcome back, ${user.name}</p>
+        </div>
+
+        <div class="stat-grid stagger">
+          <div class="stat-card"><div class="stat-icon orange"><i class="fa-solid fa-users"></i></div><div><div class="stat-value">${stats.menuCount}</div><div class="stat-label">Total Menu Items</div></div></div>
+          <div class="stat-card"><div class="stat-icon blue"><i class="fa-solid fa-box"></i></div><div><div class="stat-value">${stats.totalOrders}</div><div class="stat-label">Total Orders</div></div></div>
+          <div class="stat-card"><div class="stat-icon green"><i class="fa-solid fa-money-bill-wave"></i></div><div><div class="stat-value">${formatINR(stats.revenue)}</div><div class="stat-label">Revenue</div></div></div>
+          <div class="stat-card"><div class="stat-icon red"><i class="fa-solid fa-hourglass-half"></i></div><div><div class="stat-value">${stats.pendingOrders}</div><div class="stat-label">Pending Orders</div></div></div>
+        </div>
+
+        <div class="list-card" style="padding:24px;margin-top:24px;">
+          <div class="flex-between" style="margin-bottom:16px;">
+            <h3>Sales Analytics</h3>
+            <div class="analytics-range">
+              <button class="range-btn active" data-range="daily">Daily</button>
+              <button class="range-btn" data-range="history">History</button>
+            </div>
+          </div>
+          <div id="analyticsPanel"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:24px;margin-top:24px;" class="admin-grid">
+          <div class="list-card" style="padding:24px;">
+            <div class="flex-between" style="margin-bottom:16px;">
+              <h3>Current Menu</h3>
+              <button class="btn btn-primary btn-sm" onclick="setActiveSection('menu')"><i class="fa-solid fa-utensils"></i> Manage Menu</button>
+            </div>
+            <div id="quickMenuList"></div>
+          </div>
+          <div class="list-card" style="padding:24px;">
+            <h3 style="margin-bottom:16px;">Recent Orders</h3>
+            <div id="recentOrders"></div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('quickMenuList').innerHTML = Menu.getAll().slice(0, 6).map(item => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--ink-200);">
+          <div style="font-weight:600;">${escapeHtml(item.name)}</div>
+          <div style="font-weight:700;color:var(--primary);">${formatINR(item.price)}</div>
+        </div>
+      `).join('');
+
+      const recentOrdersList = Orders.all().slice(0, 5);
+      document.getElementById('recentOrders').innerHTML = recentOrdersList.length ? recentOrdersList.map(order => {
+        const status = String(order.status || 'Pending').toLowerCase();
+        const badgeClass = status === 'completed' ? 'success' : status === 'cancelled' ? 'error' : 'warning';
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--ink-200);">
+            <div>
+              <div style="font-weight:600;font-size:14px;">${escapeHtml(order.id || 'ORD')}</div>
+              <div class="text-muted" style="font-size:12px;">${escapeHtml(order.userEnrollment || order.userEmail || 'Student')}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:700;color:var(--primary);">${formatINR(order.amount || 0)}</div>
+              <span class="badge badge-${badgeClass}">${escapeHtml(order.status || 'Pending')}</span>
+            </div>
+          </div>
+        `;
+      }).join('') : '<div class="text-muted">No orders have been placed yet.</div>';
+
+      renderAnalyticsPanel('analyticsPanel');
+      bindSearchInput();
+    }
+
+    function renderMenuSection() {
+      content.innerHTML = `
+        <div class="page-header">
+          <h1 class="page-title">Manage Menu <i class="fa-solid fa-utensils"></i></h1>
+          <p class="page-subtitle">Add, edit, and remove food items instantly.</p>
+        </div>
+
+        <div class="list-card" style="padding:24px;">
+          <div class="flex-between" style="margin-bottom:16px;">
+            <h3>Food Items</h3>
+            <button class="btn btn-primary btn-sm" onclick="openFoodModal()"><i class="fa-solid fa-plus"></i> Add Food</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="admin-table">
+              <thead><tr><th></th><th>Name</th><th>Category</th><th>Price</th><th>Rating</th><th>Actions</th></tr></thead>
+              <tbody id="menuTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      bindSearchInput();
+      console.log("ADMIN MENU DATA:", Menu.getAll());
+      const tbody = document.getElementById('menuTableBody');
+      const items = Menu.getAll().filter(item => {
+        if (!searchTerm) return true;
+        return [item.name, item.category, item.desc].some(value => String(value).toLowerCase().includes(searchTerm));
+      });
+      tbody.innerHTML = items.map(item => `
+        <tr>
+          <td>
+  <img
+    class="row-thumb"
+    src="http://127.0.0.1:5500/Frontend/project/assets/images/food/${ item.name?.trim().toLowerCase() === "puri bhaji" ? "Puri Bhaji.png" : item.name?.trim().toLowerCase() === "cup ice cream" ? "Cup Ice Cream.jpg" : `${item.name?.trim()}.jpg` }"
+    alt="${escapeHtml(item.name)}"
+    onerror="this.style.display='none'"
+  />
+</td>
+          <td style="font-weight:600;">${escapeHtml(item.name)}</td>
+          <td><span class="badge badge-primary">${escapeHtml(item.category)}</span></td>
+          <td style="font-weight:700;color:var(--primary);">${formatINR(item.price)}</td>
+          <td><i class="fa-solid fa-star" style="color:var(--warning);"></i> ${item.rating}</td>
+          <td>
+            <button class="action-btn" style="background:rgba(52,152,219,0.15);color:var(--info);" onclick="openFoodModal(${item.id})"><i class="fa-solid fa-pen-to-square"></i> Edit</button>
+            <button class="action-btn" style="background:rgba(231,76,60,0.15);color:var(--error);" onclick="deleteFood(${item.id})"><i class="fa-solid fa-trash"></i> Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function getStudents() {
+      const seededStudents = [
+        ['252101', 'Janvi Satpute', '8600753229', 'janvisatpute378@gmail.com'],
+        ['252102', 'Rutuja Pawar', '9699211948', 'rutujapawar004912@gmail.com'],
+        ['252103', 'Bhagyashri Jadhav', '9322957011', 'aj0565107@gmail.com'],
+        ['252104', 'Pratiksha Dhane', '7499012440', 'pratikshadhane628@gmail.com'],
+        ['252105', 'Alivera pathan', '9012375941', 'aliverapathan12@gmail.com'],
+        ['252106', 'Aarav Patil', '9000001001', 'aarav.patil1001@gmail.com'],
+        ['252107', 'Vihaan Patil', '9000001002', 'vihaan.patil1002@gmail.com'],
+        ['252108', 'Aditya Patil', '9000001003', 'aditya.patil1003@gmail.com'],
+        ['252109', 'Atharva Patil', '9000001004', 'atharva.patil1004@gmail.com'],
+        ['252110', 'Om Patil', '9000001005', 'om.patil1005@gmail.com'],
+        ['252111', 'Rohan Patil', '9000001006', 'rohan.patil1006@gmail.com'],
+        ['252112', 'Rahul Patil', '9000001007', 'rahul.patil1007@gmail.com'],
+        ['252113', 'Yash Patil', '9000001008', 'yash.patil1008@gmail.com'],
+        ['252114', 'Tejas Patil', '9000001009', 'tejas.patil1009@gmail.com'],
+        ['252115', 'Sahil Patil', '9000001010', 'sahil.patil1010@gmail.com'],
+        ['252116', 'Akash Patil', '9000301011', 'akash.patil1011@gmail.com'],
+        ['252117', 'Nikhil Patil', '9000001012', 'nikhil.patil1012@gmail.com'],
+        ['252118', 'Kunal Patil', '9000001013', 'kunal.patil1013@gmail.com'],
+        ['252119', 'Ajinkya Patil', '9000001014', 'ajinkya.patil1014@gmail.com'],
+        ['252120', 'Abhishek Patil', '9000001015', 'abhishek.patil1015@gmail.com'],
+        ['252121', 'Swapnil Patil', '9000001016', 'swapnil.patil1016@gmail.com'],
+        ['252122', 'Amol Patil', '9000001017', 'amol.patil1017@gmail.com'],
+        ['252123', 'Sumit Patil', '9000001018', 'sumit.patil1018@gmail.com'],
+        ['252124', 'Vedant Patil', '9000001019', 'vedant.patil1019@gmail.com'],
+        ['252125', 'Pratik Patil', '9000001020', 'pratik.patil1020@gmail.com'],
+        ['252126', 'Anaya Patil', '9000001021', 'anaya.patil1021@gmail.com'],
+        ['252127', 'Sneha Patil', '9000001022', 'sneha.patil1022@gmail.com'],
+        ['252128', 'Priya Patil', '9000001023', 'priya.patil1023@gmail.com'],
+        ['252129', 'Pooja Patil', '9000001024', 'pooja.patil1024@gmail.com'],
+        ['252130', 'Rutuja Patil', '9000001025', 'rutuja.patil1025@gmail.com'],
+        ['252131', 'Neha Patil', '9000001026', 'neha.patil1026@gmail.com'],
+        ['252132', 'Sakshi Patil', '9000001027', 'sakshi.patil1027@gmail.com'],
+        ['252133', 'Aditi Patil', '9000001028', 'aditi.patil1028@gmail.com'],
+        ['252134', 'Vaishnavi Patil', '9000001029', 'vaishnavi.patil1029@gmail.com'],
+        ['252135', 'Riya Patil', '9000001030', 'riya.patil1030@gmail.com'],
+        ['252136', 'Komal Patil', '9000001031', 'komal.patil1031@gmail.com'],
+        ['252137', 'Shreya Patil', '9000001032', 'shreya.patil1032@gmail.com'],
+        ['252138', 'Anushka Patil', '9000001033', 'anushka.patil1033@gmail.com'],
+        ['252139', 'Tanvi Patil', '9000001034', 'tanvi.patil1034@gmail.com'],
+        ['252140', 'Mayuri Patil', '9000001035', 'mayuri.patil1035@gmail.com'],
+        ['252141', 'Pallavi Patil', '9000001036', 'pallavi.patil1036@gmail.com'],
+        ['252142', 'Reshma Patil', '9000001037', 'reshma.patil1037@gmail.com'],
+        ['252143', 'Monika Patil', '9000001038', 'monika.patil1038@gmail.com'],
+        ['252144', 'Sonali Patil', '9000001039', 'sonali.patil1039@gmail.com'],
+        ['252145', 'Megha Patil', '9000001040', 'megha.patil1040@gmail.com'],
+        ['252146', 'Prajakta Patil', '9000001041', 'prajakta.patil1041@gmail.com'],
+        ['252147', 'Dipali Patil', '9000001042', 'dipali.patil1042@gmail.com'],
+        ['252148', 'Kirti Patil', '9000001043', 'kirti.patil1043@gmail.com'],
+        ['252149', 'Asmita Patil', '9000001044', 'asmita.patil1044@gmail.com'],
+        ['252150', 'Gauri Patil', '9000001045', 'gauri.patil1045@gmail.com'],
+        ['252151', 'Shraddha Patil', '9000001046', 'shraddha.patil1046@gmail.com'],
+        ['252152', 'Bhakti Patil', '9000001047', 'bhakti.patil1047@gmail.com'],
+        ['252153', 'Mansi Patil', '9000001048', 'mansi.patil1048@gmail.com'],
+        ['252154', 'Sayali Patil', '9000001049', 'sayali.patil1049@gmail.com'],
+        ['252155', 'Kajal Patil', '9000001050', 'kajal.patil1050@gmail.com'],
+        ['252156', 'Aarav Shinde', '9000001051', 'aarav.shinde1051@gmail.com'],
+        ['252157', 'Vihaan Shinde', '9000001052', 'vihaan.shinde1052@gmail.com'],
+        ['252158', 'Aditya Shinde', '9000001053', 'aditya.shinde1053@gmail.com'],
+        ['252159', 'Atharva Shinde', '9000001054', 'atharva.shinde1054@gmail.com'],
+        ['252160', 'Om Shinde', '9000001055', 'om.shinde1055@gmail.com'],
+        ['252161', 'Rohan Shinde', '9000001056', 'rohan.shinde1056@gmail.com'],
+        ['252162', 'Rahul Shinde', '9000001057', 'rahul.shinde1057@gmail.com'],
+        ['252163', 'Yash Shinde', '9000001058', 'yash.shinde1058@gmail.com'],
+        ['252164', 'Tejas Shinde', '9000001059', 'tejas.shinde1059@gmail.com'],
+        ['252165', 'Sahil Shinde', '9000001060', 'sahil.shinde1060@gmail.com'],
+        ['252166', 'Akash Shinde', '9000001061', 'akash.shinde1061@gmail.com'],
+        ['252167', 'Nikhil Shinde', '9000001062', 'nikhil.shinde1062@gmail.com'],
+        ['252168', 'Kunal Shinde', '9000001063', 'kunal.shinde1063@gmail.com'],
+        ['252169', 'Ajinkya Shinde', '9000001064', 'ajinkya.shinde1064@gmail.com'],
+        ['252170', 'Abhishek Shinde', '9000001065', 'abhishek.shinde1065@gmail.com'],
+        ['252171', 'Swapnil Shinde', '9000001066', 'swapnil.shinde1066@gmail.com'],
+        ['252172', 'Amol Shinde', '9000001067', 'amol.shinde1067@gmail.com'],
+        ['252173', 'Sumit Shinde', '9000001068', 'sumit.shinde1068@gmail.com'],
+        ['252174', 'Vedant Shinde', '9000001069', 'vedant.shinde1069@gmail.com'],
+        ['252175', 'Pratik Shinde', '9000001070', 'pratik.shinde1070@gmail.com'],
+        ['252176', 'Anaya Shinde', '9000001071', 'anaya.shinde1071@gmail.com'],
+        ['252177', 'Sneha Shinde', '9000001072', 'sneha.shinde1072@gmail.com'],
+        ['252178', 'Priya Shinde', '9000001073', 'priya.shinde1073@gmail.com'],
+        ['252179', 'Pooja Shinde', '9000001074', 'pooja.shinde1074@gmail.com'],
+        ['252180', 'Rutuja Shinde', '9000001075', 'rutuja.shinde1075@gmail.com'],
+        ['252181', 'Neha Shinde', '9000001076', 'neha.shinde1076@gmail.com'],
+        ['252182', 'Sakshi Shinde', '9000001077', 'sakshi.shinde1077@gmail.com'],
+        ['252183', 'Aditi Shinde', '9000001078', 'aditi.shinde1078@gmail.com'],
+        ['252184', 'Vaishnavi Shinde', '9000001079', 'vaishnavi.shinde1079@gmail.com'],
+        ['252185', 'Riya Shinde', '9000001080', 'riya.shinde1080@gmail.com'],
+        ['252186', 'Komal Shinde', '9000001081', 'komal.shinde1081@gmail.com'],
+        ['252187', 'Shreya Shinde', '9000001082', 'shreya.shinde1082@gmail.com'],
+        ['252188', 'Anushka Shinde', '9000001083', 'anushka.shinde1083@gmail.com'],
+        ['252189', 'Tanvi Shinde', '9000001084', 'tanvi.shinde1084@gmail.com'],
+        ['252190', 'Mayuri Shinde', '9000001085', 'mayuri.shinde1085@gmail.com'],
+        ['252191', 'Pallavi Shinde', '9000001086', 'pallavi.shinde1086@gmail.com'],
+        ['252192', 'Reshma Shinde', '9000001087', 'reshma.shinde1087@gmail.com'],
+        ['252193', 'Monika Shinde', '9000001088', 'monika.shinde1088@gmail.com'],
+        ['252194', 'Sonali Shinde', '9000001089', 'sonali.shinde1089@gmail.com'],
+        ['252195', 'Megha Shinde', '9000001090', 'megha.shinde1090@gmail.com'],
+        ['252196', 'Prajakta Shinde', '9000001091', 'prajakta.shinde1091@gmail.com'],
+        ['252197', 'Dipali Shinde', '9000001092', 'dipali.shinde1092@gmail.com'],
+        ['252198', 'Kirti Shinde', '9000001093', 'kirti.shinde1093@gmail.com'],
+        ['252199', 'Asmita Shinde', '9000001094', 'asmita.shinde1094@gmail.com'],
+        ['252200', 'Gauri Shinde', '9000001095', 'gauri.shinde1095@gmail.com'],
+        ['252201', 'Shraddha Shinde', '9000001096', 'shraddha.shinde1096@gmail.com'],
+        ['252202', 'Bhakti Shinde', '9000001097', 'bhakti.shinde1097@gmail.com'],
+        ['252203', 'Mansi Shinde', '9000001098', 'mansi.shinde1098@gmail.com'],
+        ['252204', 'Sayali Shinde', '9000001099', 'sayali.shinde1099@gmail.com'],
+        ['252205', 'Kajal Shinde', '9000001100', 'kajal.shinde1100@gmail.com'],
+        ['252206', 'Aarav Jadhav', '9000001101', 'aarav.jadhav1101@gmail.com'],
+        ['252207', 'Vihaan Jadhav', '9000001102', 'vihaan.jadhav1102@gmail.com'],
+        ['252208', 'Aditya Jadhav', '9000001103', 'aditya.jadhav1103@gmail.com'],
+        ['252209', 'Atharva Jadhav', '9000001104', 'atharva.jadhav1104@gmail.com'],
+        ['252210', 'Om Jadhav', '9000001105', 'om.jadhav1105@gmail.com'],
+        ['252211', 'Rohan Jadhav', '9000001106', 'rohan.jadhav1106@gmail.com'],
+        ['252212', 'Rahul Jadhav', '9000001107', 'rahul.jadhav1107@gmail.com'],
+        ['252213', 'Yash Jadhav', '9000001108', 'yash.jadhav1108@gmail.com'],
+        ['252214', 'Tejas Jadhav', '9000001109', 'tejas.jadhav1109@gmail.com'],
+        ['252215', 'Sahil Jadhav', '9000001110', 'sahil.jadhav1110@gmail.com'],
+        ['252216', 'Akash Jadhav', '9000001111', 'akash.jadhav1111@gmail.com'],
+        ['252217', 'Nikhil Jadhav', '9000001112', 'nikhil.jadhav1112@gmail.com'],
+        ['252218', 'Kunal Jadhav', '9000001113', 'kunal.jadhav1113@gmail.com'],
+        ['252219', 'Ajinkya Jadhav', '9000001114', 'ajinkya.jadhav1114@gmail.com'],
+        ['252220', 'Abhishek Jadhav', '9000001115', 'abhishek.jadhav1115@gmail.com'],
+        ['252221', 'Swapnil Jadhav', '9000001116', 'swapnil.jadhav1116@gmail.com'],
+        ['252222', 'Amol Jadhav', '9000001117', 'amol.jadhav1117@gmail.com'],
+        ['252223', 'Sumit Jadhav', '9000001118', 'sumit.jadhav1118@gmail.com'],
+        ['252224', 'Vedant Jadhav', '9000001119', 'vedant.jadhav1119@gmail.com'],
+        ['252225', 'Pratik Jadhav', '9000001120', 'pratik.jadhav1120@gmail.com'],
+        ['252226', 'Anaya Jadhav', '9000001121', 'anaya.jadhav1121@gmail.com'],
+        ['252227', 'Sneha Jadhav', '9000001122', 'sneha.jadhav1122@gmail.com'],
+        ['252228', 'Priya Jadhav', '9000001123', 'priya.jadhav1123@gmail.com'],
+        ['252229', 'Pooja Jadhav', '9000001124', 'pooja.jadhav1124@gmail.com'],
+        ['252230', 'Rutuja Jadhav', '9000001125', 'rutuja.jadhav1125@gmail.com'],
+        ['252231', 'Neha Jadhav', '9000001126', 'neha.jadhav1126@gmail.com'],
+        ['252232', 'Sakshi Jadhav', '9000001127', 'sakshi.jadhav1127@gmail.com'],
+        ['252233', 'Aditi Jadhav', '9000001128', 'aditi.jadhav1128@gmail.com'],
+        ['252234', 'Vaishnavi Jadhav', '9000001129', 'vaishnavi.jadhav1129@gmail.com'],
+        ['252235', 'Riya Jadhav', '9000001130', 'riya.jadhav1130@gmail.com'],
+        ['252236', 'Komal Jadhav', '9000001131', 'komal.jadhav1131@gmail.com'],
+        ['252237', 'Shreya Jadhav', '9000001132', 'shreya.jadhav1132@gmail.com'],
+        ['252238', 'Anushka Jadhav', '9000001133', 'anushka.jadhav1133@gmail.com'],
+        ['252239', 'Tanvi Jadhav', '9000001134', 'tanvi.jadhav1134@gmail.com'],
+        ['252240', 'Mayuri Jadhav', '9000001135', 'mayuri.jadhav1135@gmail.com'],
+        ['252241', 'Pallavi Jadhav', '9000001136', 'pallavi.jadhav1136@gmail.com'],
+        ['252242', 'Reshma Jadhav', '9000001137', 'reshma.jadhav1137@gmail.com'],
+        ['252243', 'Monika Jadhav', '9000001138', 'monika.jadhav1138@gmail.com'],
+        ['252244', 'Sonali Jadhav', '9000001139', 'sonali.jadhav1139@gmail.com'],
+        ['252245', 'Megha Jadhav', '9000001140', 'megha.jadhav1140@gmail.com'],
+        ['252246', 'Prajakta Jadhav', '9000001141', 'prajakta.jadhav1141@gmail.com'],
+        ['252247', 'Dipali Jadhav', '9000001142', 'dipali.jadhav1142@gmail.com'],
+        ['252248', 'Kirti Jadhav', '9000001143', 'kirti.jadhav1143@gmail.com'],
+        ['252249', 'Asmita Jadhav', '9000001144', 'asmita.jadhav1144@gmail.com'],
+        ['252250', 'Gauri Jadhav', '9000001145', 'gauri.jadhav1145@gmail.com'],
+        ['252251', 'Shraddha Jadhav', '9000001146', 'shraddha.jadhav1146@gmail.com'],
+        ['252252', 'Bhakti Jadhav', '9000001147', 'bhakti.jadhav1147@gmail.com'],
+        ['252253', 'Mansi Jadhav', '9000001148', 'mansi.jadhav1148@gmail.com'],
+        ['252254', 'Sayali Jadhav', '9000001149', 'sayali.jadhav1149@gmail.com'],
+        ['252255', 'Kajal Jadhav', '9000001150', 'kajal.jadhav1150@gmail.com'],
+        ['252256', 'Aarav More', '9000001151', 'aarav.more1151@gmail.com'],
+        ['252257', 'Vihaan More', '9000001152', 'vihaan.more1152@gmail.com'],
+        ['252258', 'Aditya More', '9000001153', 'aditya.more1153@gmail.com'],
+        ['252259', 'Atharva More', '9000001154', 'atharva.more1154@gmail.com'],
+        ['252260', 'Om More', '9000001155', 'om.more1155@gmail.com'],
+        ['252261', 'Rohan More', '9000001156', 'rohan.more1156@gmail.com'],
+        ['252262', 'Rahul More', '9000001157', 'rahul.more1157@gmail.com'],
+        ['252263', 'Yash More', '9000001158', 'yash.more1158@gmail.com'],
+        ['252264', 'Tejas More', '9000001159', 'tejas.more1159@gmail.com'],
+        ['252265', 'Sahil More', '9000001160', 'sahil.more1160@gmail.com'],
+        ['252266', 'Akash More', '9000001161', 'akash.more1161@gmail.com'],
+        ['252267', 'Nikhil More', '9000001162', 'nikhil.more1162@gmail.com'],
+        ['252268', 'Kunal More', '9000001163', 'kunal.more1163@gmail.com'],
+        ['252269', 'Ajinkya More', '9000001164', 'ajinkya.more1164@gmail.com'],
+        ['252270', 'Abhishek More', '9000001165', 'abhishek.more1165@gmail.com'],
+        ['252271', 'Swapnil More', '9000001166', 'swapnil.more1166@gmail.com'],
+        ['252272', 'Amol More', '9000001167', 'amol.more1167@gmail.com'],
+        ['252273', 'Sumit More', '9000001168', 'sumit.more1168@gmail.com'],
+        ['252274', 'Vedant More', '9000001169', 'vedant.more1169@gmail.com'],
+        ['252275', 'Pratik More', '9000001170', 'pratik.more1170@gmail.com'],
+        ['252276', 'Anaya More', '9000001171', 'anaya.more1171@gmail.com'],
+        ['252277', 'Sneha More', '9000001172', 'sneha.more1172@gmail.com'],
+        ['252278', 'Priya More', '9000001173', 'priya.more1173@gmail.com'],
+        ['252279', 'Pooja More', '9000001174', 'pooja.more1174@gmail.com'],
+        ['252280', 'Rutuja More', '9000001175', 'rutuja.more1175@gmail.com'],
+        ['252281', 'Neha More', '9000001176', 'neha.more1176@gmail.com'],
+        ['252282', 'Sakshi More', '9000001177', 'sakshi.more1177@gmail.com'],
+        ['252283', 'Aditi More', '9000001178', 'aditi.more1178@gmail.com'],
+        ['252284', 'Vaishnavi More', '9000001179', 'vaishnavi.more1179@gmail.com'],
+        ['252285', 'Riya More', '9000001180', 'riya.more1180@gmail.com'],
+        ['252286', 'Komal More', '9000001181', 'komal.more1181@gmail.com'],
+        ['252287', 'Shreya More', '9000001182', 'shreya.more1182@gmail.com'],
+        ['252288', 'Anushka More', '9000001183', 'anushka.more1183@gmail.com'],
+        ['252289', 'Tanvi More', '9000001184', 'tanvi.more1184@gmail.com'],
+        ['252290', 'Mayuri More', '9000001185', 'mayuri.more1185@gmail.com'],
+        ['252291', 'Pallavi More', '9000001186', 'pallavi.more1186@gmail.com'],
+        ['252292', 'Reshma More', '9000001187', 'reshma.more1187@gmail.com'],
+        ['252293', 'Monika More', '9000001188', 'monika.more1188@gmail.com'],
+        ['252294', 'Sonali More', '9000001189', 'sonali.more1189@gmail.com'],
+        ['252295', 'Megha More', '9000001190', 'megha.more1190@gmail.com'],
+        ['252296', 'Prajakta More', '9000001191', 'prajakta.more1191@gmail.com'],
+        ['252297', 'Dipali More', '9000001192', 'dipali.more1192@gmail.com'],
+        ['252298', 'Kirti More', '9000001193', 'kirti.more1193@gmail.com'],
+        ['252299', 'Asmita More', '9000001194', 'asmita.more1194@gmail.com'],
+        ['252300', 'Gauri More', '9000001195', 'gauri.more1195@gmail.com'],
+        ['252301', 'Shraddha More', '9000001196', 'shraddha.more1196@gmail.com'],
+        ['252302', 'Bhakti More', '9000001197', 'bhakti.more1197@gmail.com'],
+        ['252303', 'Mansi More', '9000001198', 'mansi.more1198@gmail.com'],
+        ['252304', 'Sayali More', '9000001199', 'sayali.more1199@gmail.com'],
+        ['252305', 'Kajal More', '9000001200', 'kajal.more1200@gmail.com'],
+        ['252306', 'Aarav Pawar', '9000001201', 'aarav.pawar1201@gmail.com'],
+        ['252307', 'Vihaan Pawar', '9000001202', 'vihaan.pawar1202@gmail.com'],
+        ['252308', 'Aditya Pawar', '9000001203', 'aditya.pawar1203@gmail.com'],
+        ['252309', 'Atharva Pawar', '9000001204', 'atharva.pawar1204@gmail.com'],
+        ['252310', 'Om Pawar', '9000001205', 'om.pawar1205@gmail.com'],
+        ['252311', 'Rohan Pawar', '9000001206', 'rohan.pawar1206@gmail.com'],
+        ['252312', 'Rahul Pawar', '9000001207', 'rahul.pawar1207@gmail.com'],
+        ['252313', 'Yash Pawar', '9000001208', 'yash.pawar1208@gmail.com'],
+        ['252314', 'Tejas Pawar', '9000001209', 'tejas.pawar1209@gmail.com'],
+        ['252315', 'Sahil Pawar', '9000001210', 'sahil.pawar1210@gmail.com'],
+        ['252316', 'Akash Pawar', '9000001211', 'akash.pawar1211@gmail.com'],
+        ['252317', 'Nikhil Pawar', '9000001212', 'nikhil.pawar1212@gmail.com'],
+        ['252318', 'Kunal Pawar', '9000001213', 'kunal.pawar1213@gmail.com'],
+        ['252319', 'Ajinkya Pawar', '9000001214', 'ajinkya.pawar1214@gmail.com'],
+        ['252320', 'Abhishek Pawar', '9000001215', 'abhishek.pawar1215@gmail.com'],
+        ['252321', 'Swapnil Pawar', '9000001216', 'swapnil.pawar1216@gmail.com'],
+        ['252322', 'Amol Pawar', '9000001217', 'amol.pawar1217@gmail.com'],
+        ['252323', 'Sumit Pawar', '9000001218', 'sumit.pawar1218@gmail.com'],
+        ['252324', 'Vedant Pawar', '9000001219', 'vedant.pawar1219@gmail.com'],
+        ['252325', 'Pratik Pawar', '9000001220', 'pratik.pawar1220@gmail.com'],
+        ['252326', 'Anaya Pawar', '9000001221', 'anaya.pawar1221@gmail.com'],
+        ['252327', 'Sneha Pawar', '9000001222', 'sneha.pawar1222@gmail.com'],
+        ['252328', 'Priya Pawar', '9000001223', 'priya.pawar1223@gmail.com'],
+        ['252329', 'Pooja Pawar', '9000001224', 'pooja.pawar1224@gmail.com'],
+        ['252330', 'Rutuja Pawar', '9000001225', 'rutuja.pawar1225@gmail.com'],
+        ['252331', 'Neha Pawar', '9000001226', 'neha.pawar1226@gmail.com'],
+        ['252332', 'Sakshi Pawar', '9000001227', 'sakshi.pawar1227@gmail.com'],
+        ['252333', 'Aditi Pawar', '9000001228', 'aditi.pawar1228@gmail.com'],
+        ['252334', 'Vaishnavi Pawar', '9000001229', 'vaishnavi.pawar1229@gmail.com'],
+        ['252335', 'Riya Pawar', '9000001230', 'riya.pawar1230@gmail.com'],
+        ['252336', 'Komal Pawar', '9000001231', 'komal.pawar1231@gmail.com'],
+        ['252337', 'Shreya Pawar', '9000001232', 'shreya.pawar1232@gmail.com'],
+        ['252338', 'Anushka Pawar', '9000001233', 'anushka.pawar1233@gmail.com'],
+        ['252339', 'Tanvi Pawar', '9000001234', 'tanvi.pawar1234@gmail.com'],
+        ['252340', 'Mayuri Pawar', '9000001235', 'mayuri.pawar1235@gmail.com'],
+        ['252341', 'Pallavi Pawar', '9000001236', 'pallavi.pawar1236@gmail.com'],
+        ['252342', 'Reshma Pawar', '9000001237', 'reshma.pawar1237@gmail.com'],
+        ['252343', 'Monika Pawar', '9000001238', 'monika.pawar1238@gmail.com'],
+        ['252344', 'Sonali Pawar', '9000001239', 'sonali.pawar1239@gmail.com'],
+        ['252345', 'Megha Pawar', '9000001240', 'megha.pawar1240@gmail.com'],
+        ['252346', 'Prajakta Pawar', '9000001241', 'prajakta.pawar1241@gmail.com'],
+        ['252347', 'Dipali Pawar', '9000001242', 'dipali.pawar1242@gmail.com'],
+        ['252348', 'Kirti Pawar', '9000001243', 'kirti.pawar1243@gmail.com'],
+        ['252349', 'Asmita Pawar', '9000001244', 'asmita.pawar1244@gmail.com'],
+        ['252350', 'Gauri Pawar', '9000001245', 'gauri.pawar1245@gmail.com'],
+        ['252351', 'Shraddha Pawar', '9000001246', 'shraddha.pawar1246@gmail.com'],
+        ['252352', 'Bhakti Pawar', '9000001247', 'bhakti.pawar1247@gmail.com'],
+        ['252353', 'Mansi Pawar', '9000001248', 'mansi.pawar1248@gmail.com'],
+        ['252354', 'Sayali Pawar', '9000001249', 'sayali.pawar1249@gmail.com'],
+        ['252355', 'Kajal Pawar', '9000001250', 'kajal.pawar1250@gmail.com'],
+        ['252356', 'Aarav Chavan', '9000001251', 'aarav.chavan1251@gmail.com'],
+        ['252357', 'Vihaan Chavan', '9000001252', 'vihaan.chavan1252@gmail.com'],
+        ['252358', 'Aditya Chavan', '9000001253', 'aditya.chavan1253@gmail.com'],
+        ['252359', 'Atharva Chavan', '9000001254', 'atharva.chavan1254@gmail.com'],
+        ['252360', 'Om Chavan', '9000001255', 'om.chavan1255@gmail.com'],
+        ['252361', 'Rohan Chavan', '9000001256', 'rohan.chavan1256@gmail.com'],
+        ['252362', 'Rahul Chavan', '9000001257', 'rahul.chavan1257@gmail.com'],
+        ['252363', 'Yash Chavan', '9000001258', 'yash.chavan1258@gmail.com'],
+        ['252364', 'Tejas Chavan', '9000001259', 'tejas.chavan1259@gmail.com'],
+        ['252365', 'Sahil Chavan', '9000001260', 'sahil.chavan1260@gmail.com'],
+        ['252366', 'Akash Chavan', '9000001261', 'akash.chavan1261@gmail.com'],
+        ['252367', 'Nikhil Chavan', '9000001262', 'nikhil.chavan1262@gmail.com'],
+        ['252368', 'Kunal Chavan', '9000001263', 'kunal.chavan1263@gmail.com'],
+        ['252369', 'Ajinkya Chavan', '9000001264', 'ajinkya.chavan1264@gmail.com'],
+        ['252370', 'Abhishek Chavan', '9000001265', 'abhishek.chavan1265@gmail.com'],
+        ['252371', 'Swapnil Chavan', '9000001266', 'swapnil.chavan1266@gmail.com'],
+        ['252372', 'Amol Chavan', '9000001267', 'amol.chavan1267@gmail.com'],
+        ['252373', 'Sumit Chavan', '9000001268', 'sumit.chavan1268@gmail.com'],
+        ['252374', 'Vedant Chavan', '9000001269', 'vedant.chavan1269@gmail.com'],
+        ['252375', 'Pratik Chavan', '9000001270', 'pratik.chavan1270@gmail.com'],
+        ['252376', 'Anaya Chavan', '9000001271', 'anaya.chavan1271@gmail.com'],
+        ['252377', 'Sneha Chavan', '9000001272', 'sneha.chavan1272@gmail.com'],
+        ['252378', 'Priya Chavan', '9000001273', 'priya.chavan1273@gmail.com'],
+        ['252379', 'Pooja Chavan', '9000001274', 'pooja.chavan1274@gmail.com'],
+        ['252380', 'Rutuja Chavan', '9000001275', 'rutuja.chavan1275@gmail.com'],
+        ['252381', 'Neha Chavan', '9000001276', 'neha.chavan1276@gmail.com'],
+        ['252382', 'Sakshi Chavan', '9000001277', 'sakshi.chavan1277@gmail.com'],
+        ['252383', 'Aditi Chavan', '9000001278', 'aditi.chavan1278@gmail.com'],
+        ['252384', 'Vaishnavi Chavan', '9000001279', 'vaishnavi.chavan1279@gmail.com'],
+        ['252385', 'Riya Chavan', '9000001280', 'riya.chavan1280@gmail.com'],
+        ['252386', 'Komal Chavan', '9000001281', 'komal.chavan1281@gmail.com'],
+        ['252387', 'Shreya Chavan', '9000001282', 'shreya.chavan1282@gmail.com'],
+        ['252388', 'Anushka Chavan', '9000001283', 'anushka.chavan1283@gmail.com'],
+        ['252389', 'Tanvi Chavan', '9000001284', 'tanvi.chavan1284@gmail.com'],
+        ['252390', 'Mayuri Chavan', '9000001285', 'mayuri.chavan1285@gmail.com'],
+        ['252391', 'Pallavi Chavan', '9000001286', 'pallavi.chavan1286@gmail.com'],
+        ['252392', 'Reshma Chavan', '9000001287', 'reshma.chavan1287@gmail.com'],
+        ['252393', 'Monika Chavan', '9000001288', 'monika.chavan1288@gmail.com'],
+        ['252394', 'Sonali Chavan', '9000001289', 'sonali.chavan1289@gmail.com'],
+        ['252395', 'Megha Chavan', '9000001290', 'megha.chavan1290@gmail.com'],
+        ['252396', 'Prajakta Chavan', '9000001291', 'prajakta.chavan1291@gmail.com'],
+        ['252397', 'Dipali Chavan', '9000001292', 'dipali.chavan1292@gmail.com'],
+        ['252398', 'Kirti Chavan', '9000001293', 'kirti.chavan1293@gmail.com'],
+        ['252399', 'Asmita Chavan', '9000001294', 'asmita.chavan1294@gmail.com'],
+        ['252400', 'Gauri Chavan', '9000001295', 'gauri.chavan1295@gmail.com'],
+        ['252401', 'Shraddha Chavan', '9000001296', 'shraddha.chavan1296@gmail.com'],
+        ['252402', 'Bhakti Chavan', '9000001297', 'bhakti.chavan1297@gmail.com'],
+        ['252403', 'Mansi Chavan', '9000001298', 'mansi.chavan1298@gmail.com'],
+        ['252404', 'Sayali Chavan', '9000001299', 'sayali.chavan1299@gmail.com'],
+        ['252405', 'Kajal Chavan', '9000001300', 'kajal.chavan1300@gmail.com'],
+        ['252406', 'Aarav Mane', '9000001301', 'aarav.mane1301@gmail.com'],
+        ['252407', 'Vihaan Mane', '9000001302', 'vihaan.mane1302@gmail.com'],
+        ['252408', 'Aditya Mane', '9000001303', 'aditya.mane1303@gmail.com'],
+        ['252409', 'Atharva Mane', '9000001304', 'atharva.mane1304@gmail.com'],
+        ['252410', 'Om Mane', '9000001305', 'om.mane1305@gmail.com'],
+        ['252411', 'Rohan Mane', '9000001306', 'rohan.mane1306@gmail.com'],
+        ['252412', 'Rahul Mane', '9000001307', 'rahul.mane1307@gmail.com'],
+        ['252413', 'Yash Mane', '9000001308', 'yash.mane1308@gmail.com'],
+        ['252414', 'Tejas Mane', '9000001309', 'tejas.mane1309@gmail.com'],
+        ['252415', 'Sahil Mane', '9000001310', 'sahil.mane1310@gmail.com'],
+        ['252416', 'Akash Mane', '9000001311', 'akash.mane1311@gmail.com'],
+        ['252417', 'Nikhil Mane', '9000001312', 'nikhil.mane1312@gmail.com'],
+        ['252418', 'Kunal Mane', '9000001313', 'kunal.mane1313@gmail.com'],
+        ['252419', 'Ajinkya Mane', '9000001314', 'ajinkya.mane1314@gmail.com'],
+        ['252420', 'Abhishek Mane', '9000001315', 'abhishek.mane1315@gmail.com'],
+        ['252421', 'Swapnil Mane', '9000001316', 'swapnil.mane1316@gmail.com'],
+        ['252422', 'Amol Mane', '9000001317', 'amol.mane1317@gmail.com'],
+        ['252423', 'Sumit Mane', '9000001318', 'sumit.mane1318@gmail.com'],
+        ['252424', 'Vedant Mane', '9000001319', 'vedant.mane1319@gmail.com'],
+        ['252425', 'Pratik Mane', '9000001320', 'pratik.mane1320@gmail.com'],
+        ['252426', 'Anaya Mane', '9000001321', 'anaya.mane1321@gmail.com'],
+        ['252427', 'Sneha Mane', '9000001322', 'sneha.mane1322@gmail.com'],
+        ['252428', 'Priya Mane', '9000001323', 'priya.mane1323@gmail.com'],
+        ['252429', 'Pooja Mane', '9000001324', 'pooja.mane1324@gmail.com'],
+        ['252430', 'Rutuja Mane', '9000001325', 'rutuja.mane1325@gmail.com'],
+        ['252431', 'Neha Mane', '9000001326', 'neha.mane1326@gmail.com'],
+        ['252432', 'Sakshi Mane', '9000001327', 'sakshi.mane1327@gmail.com'],
+        ['252433', 'Aditi Mane', '9000001328', 'aditi.mane1328@gmail.com'],
+        ['252434', 'Vaishnavi Mane', '9000001329', 'vaishnavi.mane1329@gmail.com'],
+        ['252435', 'Riya Mane', '9000001330', 'riya.mane1330@gmail.com'],
+        ['252436', 'Komal Mane', '9000001331', 'komal.mane1331@gmail.com'],
+        ['252437', 'Shreya Mane', '9000001332', 'shreya.mane1332@gmail.com'],
+        ['252438', 'Anushka Mane', '9000001333', 'anushka.mane1333@gmail.com'],
+        ['252439', 'Tanvi Mane', '9000001334', 'tanvi.mane1334@gmail.com'],
+        ['252440', 'Mayuri Mane', '9000001335', 'mayuri.mane1335@gmail.com'],
+        ['252441', 'Pallavi Mane', '9000001336', 'pallavi.mane1336@gmail.com'],
+        ['252442', 'Reshma Mane', '9000001337', 'reshma.mane1337@gmail.com'],
+        ['252443', 'Monika Mane', '9000001338', 'monika.mane1338@gmail.com'],
+        ['252444', 'Sonali Mane', '9000001339', 'sonali.mane1339@gmail.com'],
+        ['252445', 'Megha Mane', '9000001340', 'megha.mane1340@gmail.com'],
+        ['252446', 'Prajakta Mane', '9000001341', 'prajakta.mane1341@gmail.com'],
+        ['252447', 'Dipali Mane', '9000001342', 'dipali.mane1342@gmail.com'],
+        ['252448', 'Kirti Mane', '9000001343', 'kirti.mane1343@gmail.com'],
+        ['252449', 'Asmita Mane', '9000001344', 'asmita.mane1344@gmail.com'],
+        ['252450', 'Gauri Mane', '9000001345', 'gauri.mane1345@gmail.com'],
+        ['252451', 'Shraddha Mane', '9000001346', 'shraddha.mane1346@gmail.com'],
+        ['252452', 'Bhakti Mane', '9000001347', 'bhakti.mane1347@gmail.com'],
+        ['252453', 'Mansi Mane', '9000001348', 'mansi.mane1348@gmail.com'],
+        ['252454', 'Sayali Mane', '9000001349', 'sayali.mane1349@gmail.com'],
+        ['252455', 'Kajal Mane', '9000001350', 'kajal.mane1350@gmail.com'],
+        ['252456', 'Aarav Deshmukh', '9000001351', 'aarav.deshmukh1351@gmail.com'],
+        ['252457', 'Vihaan Deshmukh', '9000001352', 'vihaan.deshmukh1352@gmail.com'],
+        ['252458', 'Aditya Deshmukh', '9000001353', 'aditya.deshmukh1353@gmail.com'],
+        ['252459', 'Atharva Deshmukh', '9000001354', 'atharva.deshmukh1354@gmail.com'],
+        ['252460', 'Om Deshmukh', '9000001355', 'om.deshmukh1355@gmail.com'],
+        ['252461', 'Rohan Deshmukh', '9000001356', 'rohan.deshmukh1356@gmail.com'],
+        ['252462', 'Rahul Deshmukh', '9000001357', 'rahul.deshmukh1357@gmail.com'],
+        ['252463', 'Yash Deshmukh', '9000001358', 'yash.deshmukh1358@gmail.com'],
+        ['252464', 'Tejas Deshmukh', '9000001359', 'tejas.deshmukh1359@gmail.com'],
+        ['252465', 'Sahil Deshmukh', '9000001360', 'sahil.deshmukh1360@gmail.com'],
+        ['252466', 'Akash Deshmukh', '9000001361', 'akash.deshmukh1361@gmail.com'],
+        ['252467', 'Nikhil Deshmukh', '9000001362', 'nikhil.deshmukh1362@gmail.com'],
+        ['252468', 'Kunal Deshmukh', '9000001363', 'kunal.deshmukh1363@gmail.com'],
+        ['252469', 'Ajinkya Deshmukh', '9000001364', 'ajinkya.deshmukh1364@gmail.com'],
+        ['252470', 'Abhishek Deshmukh', '9000001365', 'abhishek.deshmukh1365@gmail.com'],
+        ['252471', 'Swapnil Deshmukh', '9000001366', 'swapnil.deshmukh1366@gmail.com'],
+        ['252472', 'Amol Deshmukh', '9000001367', 'amol.deshmukh1367@gmail.com'],
+        ['252473', 'Sumit Deshmukh', '9000001368', 'sumit.deshmukh1368@gmail.com'],
+        ['252474', 'Vedant Deshmukh', '9000001369', 'vedant.deshmukh1369@gmail.com'],
+        ['252475', 'Pratik Deshmukh', '9000001370', 'pratik.deshmukh1370@gmail.com'],
+        ['252476', 'Anaya Deshmukh', '9000001371', 'anaya.deshmukh1371@gmail.com'],
+        ['252477', 'Sneha Deshmukh', '9000001372', 'sneha.deshmukh1372@gmail.com'],
+        ['252478', 'Priya Deshmukh', '9000001373', 'priya.deshmukh1373@gmail.com'],
+        ['252479', 'Pooja Deshmukh', '9000001374', 'pooja.deshmukh1374@gmail.com'],
+        ['252480', 'Rutuja Deshmukh', '9000001375', 'rutuja.deshmukh1375@gmail.com'],
+        ['252481', 'Neha Deshmukh', '9000001376', 'neha.deshmukh1376@gmail.com'],
+        ['252482', 'Sakshi Deshmukh', '9000001377', 'sakshi.deshmukh1377@gmail.com'],
+        ['252483', 'Aditi Deshmukh', '9000001378', 'aditi.deshmukh1378@gmail.com'],
+        ['252484', 'Vaishnavi Deshmukh', '9000001379', 'vaishnavi.deshmukh1379@gmail.com'],
+        ['252485', 'Riya Deshmukh', '9000001380', 'riya.deshmukh1380@gmail.com'],
+        ['252486', 'Komal Deshmukh', '9000001381', 'komal.deshmukh1381@gmail.com'],
+        ['252487', 'Shreya Deshmukh', '9000001382', 'shreya.deshmukh1382@gmail.com'],
+        ['252488', 'Anushka Deshmukh', '9000001383', 'anushka.deshmukh1383@gmail.com'],
+        ['252489', 'Tanvi Deshmukh', '9000001384', 'tanvi.deshmukh1384@gmail.com'],
+        ['252490', 'Mayuri Deshmukh', '9000001385', 'mayuri.deshmukh1385@gmail.com'],
+        ['252491', 'Pallavi Deshmukh', '9000001386', 'pallavi.deshmukh1386@gmail.com'],
+        ['252492', 'Reshma Deshmukh', '9000001387', 'reshma.deshmukh1387@gmail.com'],
+        ['252493', 'Monika Deshmukh', '9000001388', 'monika.deshmukh1388@gmail.com'],
+        ['252494', 'Sonali Deshmukh', '9000001389', 'sonali.deshmukh1389@gmail.com'],
+        ['252495', 'Megha Deshmukh', '9000001390', 'megha.deshmukh1390@gmail.com'],
+        ['252496', 'Prajakta Deshmukh', '9000001391', 'prajakta.deshmukh1391@gmail.com'],
+        ['252497', 'Dipali Deshmukh', '9000001392', 'dipali.deshmukh1392@gmail.com'],
+        ['252498', 'Kirti Deshmukh', '9000001393', 'kirti.deshmukh1393@gmail.com'],
+        ['252499', 'Asmita Deshmukh', '9000001394', 'asmita.deshmukh1394@gmail.com'],
+        ['252500', 'Gauri Deshmukh', '9000001395', 'gauri.deshmukh1395@gmail.com'],
+        ['252501', 'Shraddha Deshmukh', '9000001396', 'shraddha.deshmukh1396@gmail.com'],
+        ['252502', 'Bhakti Deshmukh', '9000001397', 'bhakti.deshmukh1397@gmail.com'],
+        ['252503', 'Mansi Deshmukh', '9000001398', 'mansi.deshmukh1398@gmail.com'],
+        ['252504', 'Sayali Deshmukh', '9000001399', 'sayali.deshmukh1399@gmail.com'],
+        ['252505', 'Kajal Deshmukh', '9000001400', 'kajal.deshmukh1400@gmail.com'],
+        ['252506', 'Aarav Kadam', '9000001401', 'aarav.kadam1401@gmail.com'],
+        ['252507', 'Vihaan Kadam', '9000001402', 'vihaan.kadam1402@gmail.com'],
+        ['252508', 'Aditya Kadam', '9000001403', 'aditya.kadam1403@gmail.com'],
+        ['252509', 'Atharva Kadam', '9000001404', 'atharva.kadam1404@gmail.com'],
+        ['252510', 'Om Kadam', '9000001405', 'om.kadam1405@gmail.com'],
+        ['252511', 'Rohan Kadam', '9000001406', 'rohan.kadam1406@gmail.com'],
+        ['252512', 'Rahul Kadam', '9000001407', 'rahul.kadam1407@gmail.com'],
+        ['252513', 'Yash Kadam', '9000001408', 'yash.kadam1408@gmail.com'],
+        ['252514', 'Tejas Kadam', '9000001409', 'tejas.kadam1409@gmail.com'],
+        ['252515', 'Sahil Kadam', '9000001410', 'sahil.kadam1410@gmail.com'],
+        ['252516', 'Akash Kadam', '9000001411', 'akash.kadam1411@gmail.com'],
+        ['252517', 'Nikhil Kadam', '9000001412', 'nikhil.kadam1412@gmail.com'],
+        ['252518', 'Kunal Kadam', '9000001413', 'kunal.kadam1413@gmail.com'],
+        ['252519', 'Ajinkya Kadam', '9000001414', 'ajinkya.kadam1414@gmail.com'],
+        ['252520', 'Abhishek Kadam', '9000001415', 'abhishek.kadam1415@gmail.com'],
+        ['252521', 'Swapnil Kadam', '9000001416', 'swapnil.kadam1416@gmail.com'],
+        ['252522', 'Amol Kadam', '9000001417', 'amol.kadam1417@gmail.com'],
+        ['252523', 'Sumit Kadam', '9000001418', 'sumit.kadam1418@gmail.com'],
+        ['252524', 'Vedant Kadam', '9000001419', 'vedant.kadam1419@gmail.com'],
+        ['252525', 'Pratik Kadam', '9000001420', 'pratik.kadam1420@gmail.com'],
+        ['252526', 'Anaya Kadam', '9000001421', 'anaya.kadam1421@gmail.com'],
+        ['252527', 'Sneha Kadam', '9000001422', 'sneha.kadam1422@gmail.com'],
+        ['252528', 'Priya Kadam', '9000001423', 'priya.kadam1423@gmail.com'],
+        ['252529', 'Pooja Kadam', '9000001424', 'pooja.kadam1424@gmail.com'],
+        ['252530', 'Rutuja Kadam', '9000001425', 'rutuja.kadam1425@gmail.com'],
+        ['252531', 'Neha Kadam', '9000001426', 'neha.kadam1426@gmail.com'],
+        ['252532', 'Sakshi Kadam', '9000001427', 'sakshi.kadam1427@gmail.com'],
+        ['252533', 'Aditi Kadam', '9000001428', 'aditi.kadam1428@gmail.com'],
+        ['252534', 'Vaishnavi Kadam', '9000001429', 'vaishnavi.kadam1429@gmail.com'],
+        ['252535', 'Riya Kadam', '9000001430', 'riya.kadam1430@gmail.com'],
+        ['252536', 'Komal Kadam', '9000001431', 'komal.kadam1431@gmail.com'],
+        ['252537', 'Shreya Kadam', '9000001432', 'shreya.kadam1432@gmail.com'],
+        ['252538', 'Anushka Kadam', '9000001433', 'anushka.kadam1433@gmail.com'],
+        ['252539', 'Tanvi Kadam', '9000001434', 'tanvi.kadam1434@gmail.com'],
+        ['252540', 'Mayuri Kadam', '9000001435', 'mayuri.kadam1435@gmail.com'],
+        ['252541', 'Pallavi Kadam', '9000001436', 'pallavi.kadam1436@gmail.com'],
+        ['252542', 'Reshma Kadam', '9000001437', 'reshma.kadam1437@gmail.com'],
+        ['252543', 'Monika Kadam', '9000001438', 'monika.kadam1438@gmail.com'],
+        ['252544', 'Sonali Kadam', '9000001439', 'sonali.kadam1439@gmail.com'],
+        ['252545', 'Megha Kadam', '9000001440', 'megha.kadam1440@gmail.com'],
+        ['252546', 'Prajakta Kadam', '9000001441', 'prajakta.kadam1441@gmail.com'],
+        ['252547', 'Dipali Kadam', '9000001442', 'dipali.kadam1442@gmail.com'],
+        ['252548', 'Kirti Kadam', '9000001443', 'kirti.kadam1443@gmail.com'],
+        ['252549', 'Asmita Kadam', '9000001444', 'asmita.kadam1444@gmail.com'],
+        ['252550', 'Gauri Kadam', '9000001445', 'gauri.kadam1445@gmail.com'],
+        ['252551', 'Shraddha Kadam', '9000001446', 'shraddha.kadam1446@gmail.com'],
+        ['252552', 'Bhakti Kadam', '9000001447', 'bhakti.kadam1447@gmail.com'],
+        ['252553', 'Mansi Kadam', '9000001448', 'mansi.kadam1448@gmail.com'],
+        ['252554', 'Sayali Kadam', '9000001449', 'sayali.kadam1449@gmail.com'],
+        ['252555', 'Kajal Kadam', '9000001450', 'kajal.kadam1450@gmail.com'],
+        ['252556', 'Aarav Joshi', '9000001451', 'aarav.joshi1451@gmail.com'],
+        ['252557', 'Vihaan Joshi', '9000001452', 'vihaan.joshi1452@gmail.com'],
+        ['252558', 'Aditya Joshi', '9000001453', 'aditya.joshi1453@gmail.com'],
+        ['252559', 'Atharva Joshi', '9000001454', 'atharva.joshi1454@gmail.com'],
+        ['252560', 'Om Joshi', '9000001455', 'om.joshi1455@gmail.com'],
+        ['252561', 'Rohan Joshi', '9000001456', 'rohan.joshi1456@gmail.com'],
+        ['252562', 'Rahul Joshi', '9000001457', 'rahul.joshi1457@gmail.com'],
+        ['252563', 'Yash Joshi', '9000001458', 'yash.joshi1458@gmail.com'],
+        ['252564', 'Tejas Joshi', '9000001459', 'tejas.joshi1459@gmail.com'],
+        ['252565', 'Sahil Joshi', '9000001460', 'sahil.joshi1460@gmail.com'],
+        ['252566', 'Akash Joshi', '9000001461', 'akash.joshi1461@gmail.com'],
+        ['252567', 'Nikhil Joshi', '9000001462', 'nikhil.joshi1462@gmail.com'],
+        ['252568', 'Kunal Joshi', '9000001463', 'kunal.joshi1463@gmail.com'],
+        ['252569', 'Ajinkya Joshi', '9000001464', 'ajinkya.joshi1464@gmail.com'],
+        ['252570', 'Abhishek Joshi', '9000001465', 'abhishek.joshi1465@gmail.com'],
+        ['252571', 'Swapnil Joshi', '9000001466', 'swapnil.joshi1466@gmail.com'],
+        ['252572', 'Amol Joshi', '9000001467', 'amol.joshi1467@gmail.com'],
+        ['252573', 'Sumit Joshi', '9000001468', 'sumit.joshi1468@gmail.com'],
+        ['252574', 'Vedant Joshi', '9000001469', 'vedant.joshi1469@gmail.com'],
+        ['252575', 'Pratik Joshi', '9000001470', 'pratik.joshi1470@gmail.com'],
+        ['252576', 'Anaya Joshi', '9000001471', 'anaya.joshi1471@gmail.com'],
+        ['252577', 'Sneha Joshi', '9000001472', 'sneha.joshi1472@gmail.com'],
+        ['252578', 'Priya Joshi', '9000001473', 'priya.joshi1473@gmail.com'],
+        ['252579', 'Pooja Joshi', '9000001474', 'pooja.joshi1474@gmail.com'],
+        ['252580', 'Rutuja Joshi', '9000001475', 'rutuja.joshi1475@gmail.com'],
+        ['252581', 'Neha Joshi', '9000001476', 'neha.joshi1476@gmail.com'],
+        ['252582', 'Sakshi Joshi', '9000001477', 'sakshi.joshi1477@gmail.com'],
+        ['252583', 'Aditi Joshi', '9000001478', 'aditi.joshi1478@gmail.com'],
+        ['252584', 'Vaishnavi Joshi', '9000001479', 'vaishnavi.joshi1479@gmail.com'],
+        ['252585', 'Riya Joshi', '9000001480', 'riya.joshi1480@gmail.com'],
+        ['252586', 'Komal Joshi', '9000001481', 'komal.joshi1481@gmail.com'],
+        ['252587', 'Shreya Joshi', '9000001482', 'shreya.joshi1482@gmail.com'],
+        ['252588', 'Anushka Joshi', '9000001483', 'anushka.joshi1483@gmail.com'],
+        ['252589', 'Tanvi Joshi', '9000001484', 'tanvi.joshi1484@gmail.com'],
+        ['252590', 'Mayuri Joshi', '9000001485', 'mayuri.joshi1485@gmail.com'],
+        ['252591', 'Pallavi Joshi', '9000001486', 'pallavi.joshi1486@gmail.com'],
+        ['252592', 'Reshma Joshi', '9000001487', 'reshma.joshi1487@gmail.com'],
+        ['252593', 'Monika Joshi', '9000001488', 'monika.joshi1488@gmail.com'],
+        ['252594', 'Sonali Joshi', '9000001489', 'sonali.joshi1489@gmail.com'],
+        ['252595', 'Megha Joshi', '9000001490', 'megha.joshi1490@gmail.com'],
+        ['252596', 'Prajakta Joshi', '9000001491', 'prajakta.joshi1491@gmail.com'],
+        ['252597', 'Dipali Joshi', '9000001492', 'dipali.joshi1492@gmail.com'],
+        ['252598', 'Kirti Joshi', '9000001493', 'kirti.joshi1493@gmail.com'],
+        ['252599', 'Asmita Joshi', '9000001494', 'asmita.joshi1494@gmail.com'],
+        ['252600', 'Gauri Joshi', '9000001495', 'gauri.joshi1495@gmail.com'],
+        ['252601', 'Shraddha Joshi', '9000001496', 'shraddha.joshi1496@gmail.com'],
+        ['252602', 'Bhakti Joshi', '9000001497', 'bhakti.joshi1497@gmail.com'],
+        ['252603', 'Mansi Joshi', '9000001498', 'mansi.joshi1498@gmail.com'],
+        ['252604', 'Sayali Joshi', '9000001499', 'sayali.joshi1499@gmail.com'],
+        ['252605', 'Kajal Joshi', '9000001500', 'kajal.joshi1500@gmail.com']
+      ].map(([enrollment, name, mobile, email], index) => ({
+        id: index + 1,
+        name,
+        enrollment,
+        email,
+        mobile,
+        department: 'Computer Science',
+        orders: 0,
+        imported: true
+      }));
+
+      const existing = Store.get('scms_students');
+      if (Array.isArray(existing) && existing.length >= seededStudents.length) {
+        return existing;
+      }
+
+      Store.set('scms_students', seededStudents);
+      return seededStudents;
+    }
+
+    function saveStudents(students) {
+      Store.set('scms_students', students);
+      return students;
+    }
+
+    async function loadBackendStudents() {
+  try {
+    const response = await fetch("http://127.0.0.1:5000/api/admin/students");
+
+    if (!response.ok) {
+      throw new Error("Failed to load students");
+    }
+
+    const backendStudents = await response.json();
+
+    console.log("Backend Students:", backendStudents);
+
+    return backendStudents;
+
+  } catch (error) {
+    console.error("Students API Error:", error);
+    Toast.show("Unable to load students from backend", "error", 2000);
+    return [];
+  }
+}
+
+async function loadBackendQR() {
+    try {
+        const response = await fetch("http://127.0.0.1:5000/api/admin/qr");
+
+        if (!response.ok) {
+            throw new Error("Failed to load QR records");
+        }
+
+        const result = await response.json();
+
+        console.log("Backend QR:", result);
+
+        if (!result.success) {
+            throw new Error(result.error || "QR API error");
+        }
+
+        return result.data;
+
+    } catch (error) {
+        console.error("QR API Error:", error);
+        Toast.show("Unable to load QR records from backend", "error", 2000);
+        return [];
+    }
+}
+
+async function loadBackendNotifications() {
+  try {
+    const response = await fetch(
+      "http://127.0.0.1:5000/api/admin/notifications"
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to load notifications");
+    }
+
+    const notifications = await response.json();
+
+    console.log("Backend Notifications:", notifications);
+
+    return notifications;
+
+  } catch (error) {
+    console.error("Notifications API Error:", error);
+    Toast.show("Unable to load notifications from backend", "error", 2000);
+    return [];
+  }
+}
+
+     async function renderStudentsSection() {
+    
+      const students = (await loadBackendStudents()).filter(student => {
+        if (!searchTerm) return true;
+        return [student.name, student.enrollment, student.email, student.department, student.mobile].some(value => String(value || '').toLowerCase().includes(searchTerm));
+      });
+      content.innerHTML = `
+        <div class="page-header">
+          <h1 class="page-title">Manage Students <i class="fa-solid fa-users"></i></h1>
+          <p class="page-subtitle">Add and manage student records.</p>
+        </div>
+        <div class="list-card" style="padding:24px;">
+          <div class="flex-between" style="margin-bottom:16px;">
+            <h3>Student Records</h3>
+            <button class="btn btn-primary btn-sm" onclick="openStudentModal()"><i class="fa-solid fa-plus"></i> Add Student</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="admin-table">
+              <thead><tr><th>Name</th><th>Enrollment</th><th>Mobile</th><th>Email</th><th>Department</th><th>Orders</th><th>Actions</th></tr></thead>
+              <tbody>
+                ${students.map(student => `
+                  <tr>
+                    <td>${escapeHtml(student.name)}</td>
+                    <td>${escapeHtml(student.enrollment)}</td>
+                    <td>${escapeHtml(student.mobile || '')}</td>
+                    <td>${escapeHtml(student.email)}</td>
+                    <td>${escapeHtml(student.department)}</td>
+                    <td>${student.orders || 0}</td>
+                    <td>
+                      <button class="action-btn" style="background:rgba(52,152,219,0.15);color:var(--primary);" onclick="openStudentModal(${student.id})"><i class="fa-solid fa-pen"></i> Edit</button>
+                      <button class="action-btn" style="background:rgba(231,76,60,0.15);color:var(--error);" onclick="deleteStudent(${student.id})"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      bindSearchInput();
+    }
+
+    async function loadBackendOrders() {
+  try {
+    const response = await fetch('http://127.0.0.1:5000/api/admin/orders');
+
+    if (!response.ok) {
+      throw new Error('Failed to load orders');
+    }
+
+    const backendOrders = await response.json();
+
+    console.log('Backend Orders:', backendOrders);
+
+    return backendOrders;
+
+  } catch (error) {
+    console.error('Orders API Error:', error);
+    Toast.show('Unable to load orders from backend', 'error');
+    return [];
+  }
+}
+
+
+   
+    async function renderOrdersSection() {
+  const backendOrders = await loadBackendOrders();
+
+  const filteredOrders = backendOrders.filter(order => {
+    if (!searchTerm) return true;
+
+    return [
+      order.order_id,
+      order.student_name,
+      order.food_name,
+      order.order_status
+    ].some(value =>
+      String(value).toLowerCase().includes(searchTerm)
+    );
+  });
+
+  content.innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">
+        Orders <i class="fa-solid fa-box"></i>
+      </h1>
+      <p class="page-subtitle">
+        Monitor live canteen orders.
+      </p>
+    </div>
+
+    <div class="list-card" style="padding:24px;">
+      <div style="overflow-x:auto;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Student</th>
+              <th>Items</th>
+              <th>Amount</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${
+              filteredOrders.map(order => `
+                <tr>
+                  <td>${escapeHtml(order.order_id)}</td>
+
+                  <td>
+                    ${escapeHtml(order.student_name)}
+                    <br>
+                    <small>${escapeHtml(order.enrollment)}</small>
+                  </td>
+
+                  <td>
+                    ${escapeHtml(order.food_name)}
+                    x${escapeHtml(order.quantity)}
+                  </td>
+
+                  <td>
+                    ${formatINR(order.total_amount)}
+                  </td>
+
+                  <td>
+                    <span class="badge badge-${
+                      order.order_status === 'CONFIRMED'
+                        ? 'success'
+                        : order.order_status === 'COMPLETED'
+                        ? 'success'
+                        : order.order_status === 'CANCELLED'
+                        ? 'error'
+                        : 'warning'
+                    }">
+                      ${escapeHtml(order.order_status)}
+                    </span>
+                  </td>
+                </tr>
+              `).join('')
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  bindSearchInput();
+}
+
+   async function renderReportsSection() {
+  const backendOrders = await loadBackendOrders();
+
+  const filteredPayments = backendOrders.filter(order => {
+    if (!searchTerm) return true;
+
+    return [
+      order.order_id,
+      order.student_name,
+      order.enrollment,
+      order.payment_status,
+      order.order_time
+    ].some(value =>
+      String(value).toLowerCase().includes(searchTerm)
+    );
+  });
+
+  const totalPaid = filteredPayments
+    .filter(order => order.payment_status === 'PAID')
+    .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+
+  content.innerHTML = `
+    <div class="page-header">
+      <h1 class="page-title">
+        Payment Reports <i class="fa-solid fa-money-bill-wave"></i>
+      </h1>
+
+      <p class="page-subtitle">
+        Daily cash and payment summary.
+      </p>
+    </div>
+
+    <div class="list-card" style="padding:24px;">
+
+      <div class="flex-between" style="margin-bottom:16px;">
+        <h3>Daily Payment Report</h3>
+
+        <div style="font-weight:700;color:var(--primary);">
+          Total Paid: ${formatINR(totalPaid)}
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="admin-table">
+
+          <thead>
+            <tr>
+              <th>Payment ID</th>
+              <th>Student</th>
+              <th>Amount</th>
+              <th>Method</th>
+              <th>Status</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+
+          <tbody>
+
+            ${
+              filteredPayments.map(order => `
+                <tr>
+
+                  <td>
+                    ${escapeHtml(order.order_id)}
+                  </td>
+
+                  <td>
+                    ${escapeHtml(order.student_name)}
+                    <br>
+                    <small>
+                      ${escapeHtml(order.enrollment)}
+                    </small>
+                  </td>
+
+                  <td>
+                    ${formatINR(order.total_amount)}
+                  </td>
+
+                  <td>
+                    UPI
+                  </td>
+
+                  <td>
+                    <span class="badge badge-${
+                      order.payment_status === 'PAID'
+                        ? 'success'
+                        : 'warning'
+                    }">
+                      ${escapeHtml(order.payment_status)}
+                    </span>
+                  </td>
+
+                  <td>
+                    ${escapeHtml(order.order_time)}
+                  </td>
+
+                </tr>
+              `).join('')
+            }
+
+          </tbody>
+
+        </table>
+      </div>
+    </div>
+  `;
+
+  bindSearchInput();
+}
+
+    async function renderQrSection() {
+      const backendQrRecords = await loadBackendQR();
+      const filteredQrRecords = backendQrRecords.filter(record => {
+        if (!searchTerm) return true;
+        return [record.id, record.student, record.type, record.code, record.status].some(value => String(value).toLowerCase().includes(searchTerm));
+      });
+      content.innerHTML = `
+        <div class="page-header">
+          <h1 class="page-title">QR Management <i class="fa-solid fa-qrcode"></i></h1>
+          <p class="page-subtitle">Manage student QR codes, payment QR records, scan history, and secure payment tracking.</p>
+        </div>
+        <div class="list-card" style="padding:24px;margin-bottom:24px;">
+          <div class="flex-between" style="margin-bottom:16px;">
+            <h3>Student & Payment QR Records</h3>
+            <span class="badge badge-success">Live Tracking</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="admin-table">
+              <th>QR ID</th>
+              <th>QR Image</th>
+              <th>UPI ID</th>
+              <th>Status</th>
+              <tbody>
+                ${filteredQrRecords.map(record => `
+                  <tr>
+                    <td>${escapeHtml(record.id)}</td>
+                    <td>${escapeHtml(record.qr_image)}</td>
+                    <td>${escapeHtml(record.upi_id)}</td>
+                    <td>
+                      <span class="badge ${record.active == 1 ? 'badge-success' : 'badge-warning'}">
+                        ${record.active == 1 ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.1fr 0.9fr;gap:24px;">
+          <div class="list-card" style="padding:24px;">
+            <h3 style="margin-bottom:16px;">Scan History</h3>
+            <div style="display:grid;gap:12px;">
+              ${qrScanHistory.map(item => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--ink-200);">
+                  <div>
+                    <div style="font-weight:600;">${escapeHtml(item.student)}</div>
+                    <div class="text-muted" style="font-size:12px;">${escapeHtml(item.item)} • ${escapeHtml(item.location)}</div>
+                  </div>
+                  <div style="font-size:13px;color:var(--primary);font-weight:600;">${escapeHtml(item.time)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="list-card" style="padding:24px;">
+            <h3 style="margin-bottom:16px;">Secure Payment Tracking</h3>
+            <div style="display:grid;gap:12px;">
+              ${payments.map(payment => `
+                <div style="padding:12px;border-radius:12px;background:var(--bg-2);border:1px solid var(--ink-200);">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <strong>${escapeHtml(payment.student)}</strong>
+                    <span class="badge badge-${payment.status === 'Paid' ? 'success' : 'warning'}">${escapeHtml(payment.status)}</span>
+                  </div>
+                  <div class="text-muted" style="font-size:13px;margin-top:4px;">${escapeHtml(payment.method)} • ${formatINR(payment.amount)} • ${escapeHtml(payment.date)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+      bindSearchInput();
+    }
+
+    async function openFoodModal(id = null) {
+      const item = Menu.getAll().find(i => i.id === Number(id));
+      const editing = Boolean(item);
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:16px;">${editing ? 'Edit Food Item' : 'Add New Food Item'}</h3>
+        <div class="field"><label>Food Name</label><input class="input" id="foodName" value="${escapeHtml(item?.name || '')}" /></div>
+        <div class="field"><label>Category</label><select class="select" id="foodCategory">${CATEGORIES.map(c => `<option value="${c.id}" ${String(item?.category) === String(c.id) ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Price (₹)</label><input class="input" id="foodPrice" type="number" value="${item?.price || ''}" /></div>
+        <div class="field"><label>Image URL</label><input class="input" id="foodImg" value="${escapeHtml(item?.img || '')}" /></div>
+        <div class="field"><label>Description</label><textarea class="textarea" id="foodDesc" rows="2">${escapeHtml(item?.desc || '')}</textarea></div>
+        <button class="btn btn-primary btn-block" id="saveFoodBtn">${editing ? 'Save Changes' : 'Add Food Item'}</button>
+      `);
+
+    overlay.querySelector('#saveFoodBtn').onclick = async () => {
+        const name = overlay.querySelector('#foodName').value.trim();
+        const category = overlay.querySelector('#foodCategory').value;
+        console.log("Selected Category ID:", category);
+        const price = Number(overlay.querySelector('#foodPrice').value);
+        const img = overlay.querySelector('#foodImg').value.trim();
+        const desc = overlay.querySelector('#foodDesc').value.trim();
+
+        if (!name || !category || Number.isNaN(price)) {
+          Toast.show('Please fill all required fields', 'error');
+          return;
+        }
+
+        if (editing) {
+           try {
+             const response = await fetch(
+                `http://127.0.0.1:5000/api/admin/foods/${item.id}`,
+               {
+                 method: "PUT",
+                 headers: {
+                   "Content-Type": "application/json"
+                 },
+                 body: JSON.stringify({
+                  Food_name: name,
+                  Category_id: category,
+                  Price: price,
+                  Image: img,
+                  Available: item.available || "1"
+                })
+             }
+         );
+
+       const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Food update failed");
+    }
+
+    Menu.update(item.id, {
+      name,
+      category,
+      price,
+      img,
+      desc
+    });
+
+    Toast.show("Food item updated", "success");
+
+  } catch (error) {
+    console.error("Food Update Error:", error);
+    Toast.show("Failed to update food item", "error");
+    return;
+  }
+
+  } else {
+    try {
+        const response = await fetch(
+            "http://127.0.0.1:5000/api/foods",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    Food_name: name,
+                    Category_id: category,
+                    Price: price,
+                    Image: img,
+                    Available: "1"
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || "Food add failed");
+        }
+
+        Toast.show("Food item added successfully", "success");
+
+    } catch (error) {
+        console.error("Food Add Error:", error);
+        Toast.show("Failed to add food item", "error");
+        return;
+    }
+}
+
+        overlay.remove();
+        setActiveSection('menu');
+      };
+    }
+
+    async function openStudentModal(id = null) {
+      const student = (await loadBackendStudents()).find(s => s.id === Number(id));
+      const editing = Boolean(student);
+      const overlay = Modal.open(`
+        <h3 style="margin-bottom:16px;">${editing ? 'Edit Student' : 'Add New Student'}</h3>
+        <div class="field"><label>Full Name</label><input class="input" id="studentName" value="${escapeHtml(student?.name || '')}" /></div>
+        <div class="field"><label>Enrollment Number</label><input class="input" id="studentEnrollment" value="${escapeHtml(student?.enrollment || '')}" /></div>
+        <div class="field"><label>Mobile</label><input class="input" id="studentMobile" value="${escapeHtml(student?.mobile || '')}" /></div>
+        <div class="field"><label>Email</label><input class="input" id="studentEmail" type="email" value="${escapeHtml(student?.email || '')}" /></div>
+        <div class="field"><label>Department</label><input class="input" id="studentDepartment" value="${escapeHtml(student?.department || '')}" /></div>
+        <div class="field"><label>Password</label><input class="input" id="studentPassword" type="password" value="" /></div>
+        <div class="field"><label>Orders Count</label><input class="input" id="studentOrders" type="number" value="${student?.orders ?? 0}" /></div>
+        <button class="btn btn-primary btn-block" id="saveStudentBtn">${editing ? 'Save Changes' : 'Add Student'}</button>
+      `);
+
+      overlay.querySelector('#saveStudentBtn').onclick = async () => {
+        const name = overlay.querySelector('#studentName').value.trim();
+        const enrollment = overlay.querySelector('#studentEnrollment').value.trim();
+        const mobile = overlay.querySelector('#studentMobile').value.trim();
+        const email = overlay.querySelector('#studentEmail').value.trim();
+        const department = overlay.querySelector('#studentDepartment').value.trim();
+        const password = overlay.querySelector('#studentPassword').value.trim();
+        const orders = Number(overlay.querySelector('#studentOrders').value || 0);
+
+        if (!name || !enrollment || !email || !department) {
+          Toast.show('Please fill all student fields', 'error');
+          return;
+        }
+
+       if (editing) {
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:5000/api/admin/students/${student.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          Name: name,
+          Enrollment_No: enrollment,
+          Mobile: mobile,
+          Email: email,
+          Department: department,
+          Gender: student.gender || "Other",
+          Profile_images: student.profile_images || ""
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Student update failed");
+    }
+
+    Toast.show("Student updated successfully", "success");
+
+  } catch (error) {
+    console.error("Update Student Error:", error);
+    Toast.show(error.message || "Failed to update student", "error");
+    return;
+  }
+
+        } else {
+  try {
+    const response = await fetch(
+      "http://127.0.0.1:5000/api/admin/students",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: name,
+          enrollment: enrollment,
+          email: email,
+          department: department,
+          phone: mobile,
+          password: password,
+          gender: "Other"
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || data.status !== "success") {
+      throw new Error(data.message || "Student could not be added");
+    }
+
+    Toast.show("Student added successfully", "success");
+
+  } catch (error) {
+    console.error("Add Student Error:", error);
+    Toast.show(error.message || "Failed to add student", "error");
+    return;
+  }
+}
+
+        overlay.remove();
+        await renderStudentsSection();
+      };
+    }
+
+    window.openFoodModal = openFoodModal;
+    window.openStudentModal = openStudentModal;
+
+   window.deleteFood = async function (id) {
+  const item = Menu.getAll().find(i => i.id === Number(id));
+
+  if (!item) return;
+
+  if (!confirm(`Delete ${item.name}?`)) return;
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:5000/api/foods/${id}`,
+      {
+        method: "DELETE"
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Food delete failed");
+    }
+
+    Toast.show("Food item deleted successfully", "success");
+
+    setActiveSection("menu");
+
+  } catch (error) {
+    console.error("Food Delete Error:", error);
+    Toast.show("Failed to delete food item", "error");
+  }
+};
+
+   window.deleteStudent = async function (id) {
+  const student = (await loadBackendStudents()).find(
+    s => s.id === Number(id)
+  );
+
+  if (!student) return;
+
+  if (!confirm(`Delete ${student.name}?`)) return;
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:5000/api/admin/students/${id}`,
+      {
+        method: "DELETE"
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Student delete failed");
+    }
+
+    Toast.show("Student deleted successfully", "success");
+
+    await renderStudentsSection();
+
+  } catch (error) {
+    console.error("Student Delete Error:", error);
+    Toast.show(error.message || "Failed to delete student", "error");
+  }
+};
+    window.setActiveSection = function (section) {
+      activeSection = section;
+      document.querySelectorAll('.nav-item[data-section]').forEach(link => {
+        link.classList.toggle('active', link.getAttribute('data-section') === section);
+      });
+
+      if (section === 'menu') renderMenuSection();
+      else if (section === 'students') renderStudentsSection();
+      else if (section === 'orders') renderOrdersSection();
+      else if (section === 'reports') renderReportsSection();
+      else if (section === 'qr') renderQrSection();
+      else renderDashboardSection();
+    };
+
+    document.querySelectorAll('.nav-item[data-section]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.setActiveSection(link.getAttribute('data-section'));
+      });
+    });
+
+    window.setActiveSection('dashboard');
+
+    // Refresh dashboard analytics in real-time when orders or menu data change
+    window.addEventListener('orders.updated', () => {
+      if (activeSection === 'dashboard') {
+        try { renderDashboardSection(); } catch (e) { /* ignore */ }
+      }
+    });
+    window.addEventListener('menu.updated', () => {
+      if (activeSection === 'dashboard') {
+        try { renderDashboardSection(); } catch (e) { /* ignore */ }
+      }
+    });
+    window.addEventListener('storage', event => {
+      if (activeSection === 'dashboard' && (event.key === 'scms_orders' || event.key === 'scms_menu_items')) {
+        try { renderDashboardSection(); } catch (e) { /* ignore */ }
+      }
+    });
+
+    async function loadAdminDashboardStats() {
+  try {
+    const response = await fetch(
+      "http://127.0.0.1:5000/api/admin/dashboard"
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to load dashboard data");
+    }
+
+    const data = await response.json();
+
+    console.log("Dashboard API data:", data);
+
+    if (!data.success) {
+      throw new Error(data.error || "Dashboard API error");
+    }
+
+    const statValues = document.querySelectorAll(".stat-value");
+
+    if (statValues.length >= 4) {
+      statValues[0].textContent = data.total_foods;
+      statValues[1].textContent = data.total_orders;
+      statValues[2].textContent =
+        "₹" + Number(data.total_revenue).toLocaleString("en-IN");
+      statValues[3].textContent = data.pending_orders;
+    }
+
+  } catch (error) {
+    console.error("Dashboard API Error:", error);
+  }
+}
+  </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+  <rect width="640" height="480" rx="32" fill="#FFF7ED"/>
+  <rect x="72" y="72" width="496" height="336" rx="24" fill="#FFE0B2"/>
+  <path d="M182 312c18-58 75-95 132-95s114 37 132 95" fill="none" stroke="#F59E0B" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="314" cy="210" r="62" fill="#F59E0B"/>
+  <rect x="220" y="332" width="188" height="28" rx="14" fill="#FB923C"/>
+  <text x="320" y="402" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="28" fill="#9A2C00">Food image placeholder</text>
+</svg>

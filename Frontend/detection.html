@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Canteen - Food Detection</title>
+</head>
+
+<body>
+
+    <h2>Food Detection</h2>
+
+    <input type="file" id="foodImage" accept="image/*">
+
+    <br><br>
+
+    <button onclick="detectFood()">Detect Food</button>
+
+    <p id="result">Select a food image.</p>
+
+    <script>
+        async function detectFood() {
+
+            const file =
+                document.getElementById("foodImage").files[0];
+
+            if (!file) {
+                document.getElementById("result").innerText =
+                    "Please select an image.";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("image", file);
+
+            document.getElementById("result").innerText =
+                "Detecting...";
+
+            try {
+
+                const response = await fetch(
+                    "http://localhost:5000/detect",
+                    {
+                        method: "POST",
+                        body: formData
+                    }
+                );
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById("result").innerText =
+                        "Detected: " + data.detection;
+                } else {
+                    document.getElementById("result").innerText =
+                        "Detection failed.";
+                }
+
+            } catch (error) {
+
+                console.error(error);
+
+                document.getElementById("result").innerText =
+                    "Backend connection failed.";
+            }
+        }
+    </script>
+
+</body>
+</html>

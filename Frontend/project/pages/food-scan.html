@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Scan Food - Smart Canteen</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+</head>
+<body>
+  <div id="foodScanRoot"></div>
+
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script>
+    const root = document.getElementById('foodScanRoot');
+    if (!Auth.guard()) {
+      window.location.href = 'login.html';
+    } else {
+      root.innerHTML = `
+        <div class="app">
+          ${renderSidebar('scan')}
+          <div class="main">
+            ${renderNavbar('Scan Food')}
+            <main class="page">
+              <div class="scan-page">
+                <div class="scan-shell glass-strong">
+                  <div class="scan-header">
+                    <div>
+                      <h2>Scan Food</h2>
+                      <p>Point the camera at the food item and capture it for instant detection and fast checkout.</p>
+                    </div>
+                    <div class="scan-status-pill" id="scanStatus"><span class="scan-dot"></span>Ready to scan</div>
+                  </div>
+
+                  <div class="scan-grid">
+                    <div class="scan-card">
+                      <div class="scan-stage" id="scanStage">
+                        <video id="video" autoplay playsinline muted></video>
+                        <div class="scan-overlay">
+                          <span class="scan-focus"></span>
+                        </div>
+                      </div>
+                      <div class="scan-actions">
+                        <button id="startBtn" class="btn btn-ghost">Start Camera</button>
+                        <button id="captureBtn" class="btn btn-primary">Capture</button>
+                      </div>
+                    </div>
+
+                    <div class="scan-card scan-info-card">
+                      <canvas id="snapshot"></canvas>
+                      <div id="resultArea" class="scan-result-area"></div>
+                    </div>
+                  </div>
+
+                  <div id="billArea" class="scan-bill-area"></div>
+                  <div id="qrcode" class="scan-qr-area"></div>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>
+      `;
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebarBackdrop');
+      document.getElementById('menuToggle')?.addEventListener('click', () => {
+        sidebar.classList.add('open');
+        backdrop.classList.add('open');
+      });
+      backdrop?.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('open');
+      });
+    }
+  </script>
+
+  <!-- TensorFlow.js and MobileNet -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
+  <!-- QR Code lib -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="../js/food-scan.js"></script>
+</body>
+</html>

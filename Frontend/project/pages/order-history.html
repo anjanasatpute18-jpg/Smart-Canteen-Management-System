@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order History - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <style>
+    .order-row { display:flex; align-items:center; gap:16px; padding:16px; border-bottom:1px solid var(--ink-200); transition:background 0.2s; }
+    .order-row:hover { background:var(--accent); }
+    .order-row:last-child { border-bottom:none; }
+    .order-thumb { width:56px; height:56px; border-radius:14px; object-fit:cover; flex-shrink:0; }
+    .order-info { flex:1; min-width:0; }
+    .order-id { font-weight:600; }
+    .order-date { font-size:13px; color:var(--ink-500); }
+    .order-amount { font-weight:700; color:var(--primary); }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script>
+    initDashboard('history');
+    const content = document.getElementById('pageContent');
+    const user = Auth.getUser();
+    const seededOrders = [
+      { id: 'ORD-2026-0427', items: [{ name: 'Veg Thali', qty: 1, price: 90 }, { name: 'Tea', qty: 2, price: 12 }], amount: 114, createdAt: 'Jun 26, 2026 - 12:30 PM', status: 'preparing', payment: 'UPI', paymentStatus: 'Paid' },
+      { id: 'ORD-2026-0426', items: [{ name: 'Pav Bhaji', qty: 1, price: 60 }, { name: 'Lassi', qty: 1, price: 40 }], amount: 100, createdAt: 'Jun 25, 2026 - 01:15 PM', status: 'completed', payment: 'Wallet', paymentStatus: 'Paid' },
+      { id: 'ORD-2026-0425', items: [{ name: 'Dosa', qty: 1, price: 50 }, { name: 'Idli', qty: 1, price: 40 }, { name: 'Coffee', qty: 1, price: 15 }], amount: 95, createdAt: 'Jun 25, 2026 - 09:30 AM', status: 'completed', payment: 'Cash', paymentStatus: 'Paid' }
+    ];
+
+    const statusMap = {
+      pending: { label: 'Pending', cls: 'badge-warning' },
+      preparing: { label: 'Preparing', cls: 'badge-warning' },
+      ready: { label: 'Ready', cls: 'badge-success' },
+      completed: { label: 'Completed', cls: 'badge-success' },
+      cancelled: { label: 'Cancelled', cls: 'badge-error' }
+    };
+
+    function getUserOrders() {
+      if (!user) return [];
+      const orders = Orders.forUser();
+      if (orders.length) return orders;
+      return seededOrders.map(order => ({
+        ...order,
+        userEmail: user.email,
+        userEnrollment: user.enrollment || '',
+      }));
+    }
+
+    function renderOrders() {
+      const currentOrders = getUserOrders();
+      content.innerHTML = `
+        <div class="page-header">
+          <h1 class="page-title">My Orders <i class="fa-solid fa-box-open"></i></h1>
+          <p class="page-subtitle">Track every order with live status, payment details, and order history.</p>
+        </div>
+        <div class="list-card">
+          ${currentOrders.length === 0 ? `
+            <div style="text-align:center;padding:40px 20px;">
+              <div style="font-size:3rem;margin-bottom:12px;"><i class="fa-solid fa-inbox"></i></div>
+              <p style="color:var(--ink-600);">No orders found for your account yet.</p>
+            </div>
+          ` : currentOrders.map(o => `
+            <div class="order-row">
+              <div class="order-info">
+                <div class="order-id">${o.id}</div>
+                <div class="order-date">${(o.items || []).map(i => `${i.name} × ${i.qty}`).join(', ')} • ${o.createdAt || o.date}</div>
+                <div class="order-date">Payment: ${o.payment} • ${o.paymentStatus}</div>
+              </div>
+              <span class="badge ${statusMap[o.status]?.cls || 'badge-warning'}">${statusMap[o.status]?.label || o.status}</span>
+              <div class="order-amount">${formatINR(o.amount)}</div>
+              <button class="btn btn-ghost btn-sm" onclick="location.href='order.html?id=${o.id}'">View</button>
+              ${o.status !== 'completed' && o.status !== 'cancelled' ? `
+                <button class="btn btn-error btn-sm" onclick="cancelOrder('${o.id}')">Cancel</button>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    window.cancelOrder = (orderId) => {
+      Modal.open(`
+        <div style="text-align:center;padding:20px;">
+          <div style="font-size:2rem;color:var(--error);margin-bottom:16px;"><i class="fa-solid fa-exclamation-circle"></i></div>
+          <h3>Cancel Order?</h3>
+          <p style="color:var(--ink-600);margin:8px 0 24px;">Are you sure you want to cancel order <strong>${orderId}</strong>?</p>
+          <div style="display:flex;gap:12px;justify-content:center;">
+            <button class="btn btn-outline btn-sm" onclick="document.querySelector('.modal-overlay').remove();">No, Keep it</button>
+            <button class="btn btn-error btn-sm" onclick="confirmCancel('${orderId}');">Yes, Cancel it</button>
+          </div>
+        </div>
+      `);
+    };
+
+    window.confirmCancel = (orderId) => {
+      Orders.cancel(orderId);
+      document.querySelector('.modal-overlay')?.remove();
+      Toast.show(`✓ Order ${orderId} cancelled!`, 'success', 1800);
+      setTimeout(() => renderOrders(), 800);
+    };
+
+    renderOrders();
+    const liveUpdater = setInterval(() => {
+      const activeOrders = Orders.forUser().filter(o => ['pending', 'preparing'].includes(o.status));
+      activeOrders.forEach((o) => {
+        if (o.status === 'pending') Orders.updateStatus(o.id, 'preparing');
+        else if (o.status === 'preparing') Orders.updateStatus(o.id, 'ready');
+      });
+      if (!activeOrders.length) clearInterval(liveUpdater);
+      renderOrders();
+    }, 12000);
+  </script>
+</body>
+</html>

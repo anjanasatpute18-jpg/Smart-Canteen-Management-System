@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Canteen Management System</title>
+  <link rel="icon" type="image/svg+xml" href="javascript.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/auth.css" />
+  <script src="js/translations.js"></script>
+</head>
+<body class="welcome-body">
+
+  <!-- ===== Sticky Nav ===== -->
+  <nav class="welcome-nav" id="welcomeNav">
+    <a href="#home" class="nav-logo">
+      <div class="mark"><i class="fa-solid fa-utensils"></i></div>
+      <span>Smart Canteen</span>
+    </a>
+    <div class="nav-links">
+      <a href="#about">About</a>
+      <a href="#features">Features</a>
+      
+    </div>
+  </nav>
+
+  <!-- ===== Hero Section ===== -->
+  <section class="hero" id="home">
+    <div class="hero-content">
+      <span class="hero-badge"><i class="fa-solid fa-utensils"></i> Smart Campus Dining</span>
+      <h1>Good Food <span class="accent-word">Good Mood</span></h1>
+      <p class="hero-description">Order your favorite meals in seconds. Fresh, fast, and always delicious.</p>
+      <div class="hero-actions" style="margin:24px 0; display:flex; flex-wrap:wrap; gap:14px;">
+        <a class="btn btn-primary" href="pages/register.html">Get Started</a>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat"><div class="num">100+</div><div class="label">Food Items</div></div>
+        <div class="hero-stat"><div class="num">5K+</div><div class="label">Students</div></div>
+        <div class="hero-stat"><div class="num">4.7★</div><div class="label">Avg Rating</div></div>
+      </div>
+    </div>
+    <a href="#about" class="scroll-cue"><i class="fa-solid fa-chevron-down"></i></a>
+  </section>
+
+  <!-- ===== About Section ===== -->
+  <section class="section section-alt" id="about">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-img reveal">
+          <img src="https://images.pexels.com/photos/3184192/pexels-photo-3184192.jpeg?auto=compress&cs=tinysrgb&w=900" alt="Canteen" />
+        </div>
+        <div class="about-text reveal">
+          <div class="section-head" style="text-align:left;margin:0 0 16px;">
+            <span class="eyebrow">About Us</span>
+            <h2>A Smarter Way to Dine on Campus</h2>
+          </div>
+          <p>Our Smart Canteen Management System brings the entire campus dining experience online. From browsing the menu to cashless payments, we make every meal effortless.</p>
+          <ul class="about-list">
+            <li><span class="check"><i class="fa-solid fa-check"></i></span> Cashless UPI & Smart Card payments</li>
+            <li><span class="check"><i class="fa-solid fa-check"></i></span> QR code food scanning for instant orders</li>
+            <li><span class="check"><i class="fa-solid fa-check"></i></span> Real-time order tracking & history</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Features Section ===== -->
+  <section class="section" id="features">
+    <div class="section-head reveal">
+      <span class="eyebrow">Features</span>
+      <h2>Everything You Need in One App</h2>
+      <p>Powerful features designed to make campus dining fast, smart, and delightful.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card reveal"><div class="feature-icon"><i class="fa-solid fa-utensils"></i></div><h3>Digital Menu</h3><p>Browse 100+ food items across 9 categories with real images and ratings.</p></div>
+      <div class="feature-card reveal"><div class="feature-icon"><i class="fa-solid fa-mobile-screen-button"></i></div><h3>UPI Payments</h3><p>Pay instantly via Google Pay, PhonePe, Paytm, or BHIM with QR codes.</p></div>
+      <div class="feature-card reveal"><div class="feature-icon"><i class="fa-solid fa-qrcode"></i></div><h3>QR Food Scanner</h3><p>Scan QR codes on tables to instantly view menu and place orders.</p></div>
+      <div class="feature-card reveal"><div class="feature-icon"><i class="fa-solid fa-wallet"></i></div><h3>Digital Wallet</h3><p>Add money, track spending, and view all transactions in one place.</p></div>
+      <div class="feature-card reveal"><div class="feature-icon"><i class="fa-solid fa-box"></i></div><h3>Order Tracking</h3><p>Real-time order status with estimated preparation and delivery time.</p></div>
+    </div>
+  </section>
+
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="logo"><div class="mark"><i class="fa-solid fa-utensils"></i></div><h3>Smart Canteen</h3></div>
+        <p>The intelligent campus dining platform that connects students, canteens, and payments in one seamless experience.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Quick Links</h4>
+        <a href="#home">Home</a><a href="#about">About</a><a href="#features">Features</a>
+      </div>
+      <div class="footer-col">
+        <h4>Account</h4>
+        <a href="pages/login.html">Login</a><a href="pages/register.html">Register</a><a href="pages/food-scan.html">Scan Food</a><a href="pages/admin-login.html">Admin Login</a>
+      </div>
+      <div class="footer-col">
+        <h4>Follow Us</h4>
+        <a href="#">Facebook</a><a href="#">Instagram</a><a href="#">Twitter</a><a href="#">YouTube</a>
+      </div>
+    </div>
+    <div class="footer-bottom">© 2026 Smart Canteen Management System. All rights reserved.</div>
+  </footer>
+
+  <script src="js/app.js"></script>
+  <script>
+    // Sticky nav background on scroll
+    const nav = document.getElementById('welcomeNav');
+    window.addEventListener('scroll', () => {
+      nav.classList.toggle('scrolled', window.scrollY > 60);
+    });
+
+    // Reveal on scroll
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UPI Payment - Smart Canteen</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/dashboard.css" />
+  <style>
+    .upi-wrap { max-width:480px; margin:0 auto; text-align:center; }
+    .qr-large {
+      width:240px; height:240px; margin:0 auto 24px; background:#fff; padding:16px;
+      border-radius:20px; box-shadow:var(--shadow-lg);
+    }
+    .qr-large svg { width:100%; height:100%; }
+    .upi-apps { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin:24px 0; }
+    .upi-app {
+      display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px;
+      border-radius:16px; background:var(--secondary); border:1px solid var(--ink-200);
+      cursor:pointer; transition:all 0.3s; min-width:90px;
+    }
+    .upi-app:hover { transform:translateY(-4px); box-shadow:var(--shadow-md); border-color:var(--primary); }
+    .upi-app .logo { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.5rem; }
+    .upi-app .name { font-size:13px; font-weight:600; }
+    .amount-display {
+      font-size:2.5rem; font-weight:700; color:var(--primary); margin:16px 0;
+    }
+  </style>
+</head>
+<body>
+  <script src="../js/app.js"></script>
+  <script src="../js/data.js"></script>
+  <script>
+    initDashboard('upi');
+    const content = document.getElementById('pageContent');
+    
+    // Get bill from QR scanner or use default
+    const tempBill = Store.get('tempBill') || null;
+    let amount = 0;
+    let billHTML = '';
+
+    if (tempBill && tempBill.items && tempBill.items.length > 0) {
+      amount = tempBill.total;
+      billHTML = `
+        <div style="background:var(--bg-2);border-radius:16px;padding:16px;margin-bottom:24px;text-align:left;border:2px solid var(--primary);">
+          <h3 style="margin-bottom:12px;text-align:center;">📋 Bill Details</h3>
+          ${tempBill.items.map(item => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+              <div><strong>${item.name}</strong> <span style="color:var(--ink-600);">x${item.qty}</span></div>
+              <strong style="color:var(--primary);">${formatINR(item.price * item.qty)}</strong>
+            </div>
+          `).join('')}
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:18px;font-weight:700;color:var(--primary);">
+            <span>Total:</span>
+            <span>${formatINR(amount)}</span>
+          </div>
+        </div>
+      `;
+    } else {
+      amount = 114; // Default demo amount
+    }
+
+    content.innerHTML = `
+      <div class="page-header text-center">
+        <h1 class="page-title">UPI Payment <i class="fa-solid fa-mobile-screen-button"></i></h1>
+        <p class="page-subtitle">Scan or choose an app to pay</p>
+      </div>
+      <div class="upi-wrap glass" style="padding:32px;">
+        ${billHTML}
+        <div class="amount-display">${formatINR(amount)}</div>
+        <div class="qr-large">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" fill="#fff"/>
+            <g fill="#1a1a1a">
+              <rect x="5" y="5" width="25" height="25"/><rect x="10" y="10" width="15" height="15" fill="#fff"/><rect x="13" y="13" width="9" height="9" fill="#1a1a1a"/>
+              <rect x="70" y="5" width="25" height="25"/><rect x="75" y="10" width="15" height="15" fill="#fff"/><rect x="78" y="13" width="9" height="9" fill="#1a1a1a"/>
+              <rect x="5" y="70" width="25" height="25"/><rect x="10" y="75" width="15" height="15" fill="#fff"/><rect x="13" y="78" width="9" height="9" fill="#1a1a1a"/>
+              <rect x="35" y="5" width="5" height="5"/><rect x="45" y="5" width="5" height="10"/><rect x="55" y="10" width="5" height="5"/><rect x="35" y="20" width="10" height="5"/><rect x="50" y="20" width="5" height="10"/>
+              <rect x="5" y="35" width="5" height="5"/><rect x="15" y="40" width="5" height="10"/><rect x="25" y="35" width="5" height="5"/><rect x="35" y="40" width="10" height="5"/><rect x="50" y="35" width="5" height="10"/><rect x="60" y="40" width="5" height="5"/><rect x="70" y="35" width="10" height="5"/><rect x="85" y="40" width="5" height="10"/>
+              <rect x="35" y="55" width="5" height="10"/><rect x="45" y="50" width="10" height="5"/><rect x="60" y="55" width="5" height="5"/><rect x="70" y="50" width="5" height="10"/><rect x="80" y="55" width="10" height="5"/>
+              <rect x="35" y="70" width="5" height="5"/><rect x="45" y="75" width="5" height="10"/><rect x="55" y="70" width="10" height="5"/><rect x="70" y="75" width="5" height="5"/><rect x="80" y="70" width="10" height="10"/><rect x="85" y="85" width="5" height="5"/>
+            </g>
+          </svg>
+        </div>
+        <p class="text-muted text-sm" style="margin-bottom:20px;">Scan with any UPI app to pay</p>
+
+        <h3 style="margin-bottom:12px;">Or pay with</h3>
+        <div class="upi-apps">
+          <div class="upi-app" onclick="pay('Google Pay')"><div class="logo" style="background:#E8F0FE;"><i class="fa-brands fa-google-pay"></i></div><span class="name">Google Pay</span></div>
+          <div class="upi-app" onclick="pay('PhonePe')"><div class="logo" style="background:#E8F5E9;"><i class="fa-solid fa-mobile-screen"></i></div><span class="name">PhonePe</span></div>
+          <div class="upi-app" onclick="pay('Paytm')"><div class="logo" style="background:#FFF3E0;"><i class="fa-solid fa-money-bill-transfer"></i></div><span class="name">Paytm</span></div>
+          <div class="upi-app" onclick="pay('BHIM')"><div class="logo" style="background:#E3F2FD;"><i class="fa-solid fa-qrcode"></i></div><span class="name">BHIM</span></div>
+        </div>
+      </div>
+    `;
+
+    window.pay = (app) => {
+      const overlay = Modal.open(`
+        <div style="text-align:center;padding:20px;">
+          <div style="font-size:3rem;margin-bottom:12px;animation:spin 1s linear infinite;display:inline-block;"><i class="fa-solid fa-spinner"></i></div>
+          <h3>Processing Payment</h3>
+          <p style="color:var(--ink-600);margin:8px 0 20px;">Redirecting to ${app}...</p>
+        </div>
+      `);
+      setTimeout(() => {
+        overlay.remove();
+        const success = Modal.open(`
+          <div style="text-align:center;padding:20px;">
+            <div style="width:80px;height:80px;border-radius:50%;background:var(--success);color:#fff;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin:0 auto 16px;animation:modalIn 0.4s var(--ease-bounce);"><i class="fa-solid fa-check"></i></div>
+            <h3>Payment Successful!</h3>
+            <p style="color:var(--ink-600);margin:8px 0 4px;">${formatINR(amount)} paid via ${app}</p>
+            <p style="font-size:13px;color:var(--ink-500);margin-bottom:20px;">Transaction ID: TXN${Date.now()}</p>
+            <button class="btn btn-primary btn-block" onclick="completeOrder();">Back to Home</button>
+          </div>
+        `);
+      }, 2000);
+    };
+
+  window.completeOrder = async () => {
+  if (tempBill && tempBill.items.length > 0) {
+
+   const user = Auth.getUser();
+
+const order = {
+  user_id: 532,
+  items: tempBill.items.map(item => ({
+    food_id: item.id,
+    quantity: item.qty,
+    price: item.price
+  }))
+};
+
+
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(order)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Order API Error:', result);
+        alert('Order save failed!');
+        return;
+      }
+
+      console.log('Order saved to backend:', result);
+
+      const paymentResponse = await fetch(
+  `http://127.0.0.1:5000/api/orders/${result.order_id}/payment`,
+  {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }
+);
+
+const paymentResult = await paymentResponse.json();
+
+if (!paymentResponse.ok) {
+  console.error('Payment Update Error:', paymentResult);
+  alert('Payment status update failed!');
+  return;
+}
+
+console.log('Payment status updated:', paymentResult);
+
+      // Save in frontend also
+      const orders = Store.get('scms_orders') || [];
+      orders.push(order);
+      Store.set('scms_orders', orders);
+
+      Store.set('tempBill', null);
+
+      location.href = 'dashboard.html';
+
+    } catch (error) {
+      console.error('Backend connection error:', error);
+      alert('Backend server is not connected!');
+    }
+
+  } else {
+    location.href = 'dashboard.html';
+  }
+};
+  </script>
+</body>
+</html>
