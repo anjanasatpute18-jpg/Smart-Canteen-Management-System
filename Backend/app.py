@@ -1,4 +1,8 @@
 from flask import Flask, jsonify, request
+import random
+import time
+import smtplib
+from email.message import EmailMessage
 from flask_cors import CORS
 from database import get_connection
 import cv2
@@ -6,8 +10,428 @@ import numpy as np
 from ultralytics import YOLO
 import os
 
+
+# ============================================================
+# FLASK CONFIGURATION
+# ============================================================
+
 app = Flask(__name__)
 CORS(app)
+
+# Store OTP temporarily
+reset_otps = {}
+
+
+# ============================================================
+# GMAIL CONFIGURATION
+# ============================================================
+
+# Enter your Gmail address and Gmail App Password here.
+# Do NOT use your normal Gmail password.
+SENDER_EMAIL = "pratikshadhane628@gmail.com"
+APP_PASSWORD = "ivsj dvuy kvju scwj"
+
+
+# ============================================================
+# OTP - SEND OTP
+# ============================================================
+
+@app.route("/api/send-otp", methods=["POST"])
+def send_otp():
+
+    data = request.get_json() or {}
+    email = str(data.get("email", "")).strip()
+
+    if not email:
+        return jsonify({
+            "status": "error",
+            "message": "Email is required"
+        }), 400
+
+    try:
+        # ----------------------------------------------------
+        # CHECK EMAIL IN DATABASE
+        # ----------------------------------------------------
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT Id
+            FROM student_table
+            WHERE Email = ?
+            LIMIT 1
+        """, (email,))
+
+        student = cursor.fetchone()
+        conn.close()
+
+        if not student:
+            return jsonify({
+                "status": "error",
+                "message": "Email not registered"
+            }), 404
+
+        # ----------------------------------------------------
+        # GENERATE OTP
+        # ----------------------------------------------------
+        otp = str(random.randint(100000, 999999))
+
+        reset_otps[email] = {
+            "otp": otp,
+            "expires": time.time() + 300
+        }
+
+        print("========================================")
+        print("OTP GENERATED")
+        print("EMAIL:", email)
+        print("OTP:", otp)
+        print("========================================")
+
+        # ----------------------------------------------------
+        # CHECK GMAIL CONFIGURATION
+        # ----------------------------------------------------
+        if (
+            not SENDER_EMAIL
+            or not APP_PASSWORD
+            or "YOUR_GMAIL" in SENDER_EMAIL
+            or "YOUR_16_CHARACTER" in APP_PASSWORD
+        ):
+            return jsonify({
+                "status": "error",
+                "message": "Gmail configuration is missing in app.py"
+            }), 500
+
+        # ----------------------------------------------------
+        # CREATE OTP EMAIL
+        # ----------------------------------------------------
+        msg = EmailMessage()
+        msg["Subject"] = "Smart Canteen - Password Reset OTP"
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = email
+
+        msg.set_content(f"""
+Hello,
+
+Your Smart Canteen password reset OTP is:
+
+{otp}
+
+This OTP is valid for 5 minutes.
+
+If you did not request this password reset, please ignore this email.
+
+Smart Canteen Management System
+""")
+
+        # ----------------------------------------------------
+        # SEND EMAIL USING GMAIL SMTP
+        # ----------------------------------------------------
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(SENDER_EMAIL, APP_PASSWORD)
+            smtp.send_message(msg)
+
+        print("OTP EMAIL SENT SUCCESSFULLY TO:", email)
+
+        return jsonify({
+            "status": "success",
+            "message": "OTP sent successfully"
+        }), 200
+
+    except Exception as e:
+        print("SEND OTP EMAIL ERROR:", repr(e))
+
+        return jsonify({
+            "status": "error",
+            "message": "Failed to send OTP email"
+        }), 500
+
+
+# ============================================================
+# OTP - FORGOT PASSWORD
+# ============================================================
+
+@app.route("/api/forgot-password", methods=["POST"])
+def forgot_password():
+
+    data = request.get_json() or {}
+    email = str(data.get("email", "")).strip()
+
+    if not email:
+        return jsonify({
+            "status": "error",
+            "message": "Email is required"
+        }), 400
+
+    try:
+
+        # ----------------------------------------------------
+        # CHECK EMAIL IN DATABASE
+        # ----------------------------------------------------
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT Id
+            FROM student_table
+            WHERE Email = ?
+            LIMIT 1
+        """, (email,))
+
+        student = cursor.fetchone()
+        conn.close()
+
+        if not student:
+            return jsonify({
+                "status": "error",
+                "message": "Email not registered"
+            }), 404
+
+        # ----------------------------------------------------
+        # GENERATE OTP
+        # ----------------------------------------------------
+
+        otp = str(random.randint(100000, 999999))
+
+        reset_otps[email] = {
+            "otp": otp,
+            "expires": time.time() + 300
+        }
+
+        print("========================================")
+        print("RESET OTP")
+        print("EMAIL:", email)
+        print("OTP:", otp)
+        print("========================================")
+
+        # ----------------------------------------------------
+        # CHECK EMAIL CONFIGURATION
+        # ----------------------------------------------------
+
+        if not SENDER_EMAIL or not APP_PASSWORD:
+
+            print("EMAIL CONFIGURATION NOT FOUND")
+
+            return jsonify({
+                "status": "error",
+                "message": "Email service is not configured"
+            }), 500
+
+        # ----------------------------------------------------
+        # CREATE EMAIL
+        # ----------------------------------------------------
+
+        msg = EmailMessage()
+
+        msg["Subject"] = "Smart Canteen - Password Reset OTP"
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = email
+
+        msg.set_content(f"""
+Hello,
+
+Your Smart Canteen password reset OTP is:
+
+{otp}
+
+This OTP is valid for 5 minutes.
+
+If you did not request this password reset, please ignore this email.
+
+Smart Canteen Management System
+""")
+
+        # ----------------------------------------------------
+        # SEND EMAIL
+        # ----------------------------------------------------
+
+        with smtplib.SMTP_SSL(
+            "smtp.gmail.com",
+            465
+        ) as smtp:
+
+            smtp.login(
+                SENDER_EMAIL,
+                APP_PASSWORD
+            )
+
+            smtp.send_message(msg)
+
+        print(
+            "OTP EMAIL SENT SUCCESSFULLY TO:",
+            email
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": "OTP sent successfully"
+        }), 200
+
+    except Exception as e:
+
+        print("❌ FORGOT PASSWORD EMAIL ERROR:", repr(e))
+
+        return jsonify({
+            "status": "error",
+            "message": "Failed to send OTP email"
+        }), 500
+
+
+# ============================================================
+# OTP - VERIFY
+# ============================================================
+
+@app.route("/api/verify-otp", methods=["POST"])
+def verify_otp():
+
+    data = request.get_json() or {}
+
+    email = str(data.get("email", "")).strip()
+    otp = str(data.get("otp", "")).strip()
+
+    if not email or not otp:
+        return jsonify({
+            "status": "error",
+            "message": "Email and OTP are required"
+        }), 400
+
+    stored = reset_otps.get(email)
+
+    if not stored:
+
+        return jsonify({
+            "status": "error",
+            "message": "OTP not found. Please request a new OTP."
+        }), 400
+
+    # Check expiry
+    if time.time() > stored["expires"]:
+
+        reset_otps.pop(email, None)
+
+        return jsonify({
+            "status": "error",
+            "message": "OTP expired. Please request a new OTP."
+        }), 400
+
+    # Check OTP
+    if otp != str(stored["otp"]):
+
+        return jsonify({
+            "status": "error",
+            "message": "Invalid OTP"
+        }), 400
+
+    return jsonify({
+        "status": "success",
+        "message": "OTP verified successfully"
+    }), 200
+
+
+# ============================================================
+# OTP - RESET PASSWORD
+# ============================================================
+
+@app.route("/api/reset-password", methods=["POST"])
+def reset_password():
+
+    data = request.get_json() or {}
+
+    email = str(data.get("email", "")).strip()
+    otp = str(data.get("otp", "")).strip()
+    new_password = str(data.get("password", ""))
+
+    if not email or not otp or not new_password:
+
+        return jsonify({
+            "status": "error",
+            "message": "Email, OTP and password are required"
+        }), 400
+
+    # Your existing requirement:
+    # password must be exactly 6 characters
+
+    if len(new_password) != 6:
+
+        return jsonify({
+            "status": "error",
+            "message": "Password must be exactly 6 characters"
+        }), 400
+
+    stored = reset_otps.get(email)
+
+    if not stored:
+
+        return jsonify({
+            "status": "error",
+            "message": "OTP not found. Please request a new OTP."
+        }), 400
+
+    # Check expiry
+    if time.time() > stored["expires"]:
+
+        reset_otps.pop(email, None)
+
+        return jsonify({
+            "status": "error",
+            "message": "OTP expired"
+        }), 400
+
+    # Check OTP
+    if otp != str(stored["otp"]):
+
+        return jsonify({
+            "status": "error",
+            "message": "Invalid OTP"
+        }), 400
+
+    try:
+
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE student_table
+            SET Password = ?
+            WHERE Email = ?
+        """, (
+            new_password,
+            email
+        ))
+
+        if cursor.rowcount == 0:
+
+            conn.close()
+
+            return jsonify({
+                "status": "error",
+                "message": "Student not found"
+            }), 404
+
+        conn.commit()
+        conn.close()
+
+        # Delete OTP after successful reset
+        reset_otps.pop(email, None)
+
+        return jsonify({
+            "status": "success",
+            "message": "Password updated successfully"
+        }), 200
+
+    except Exception as e:
+
+        print("RESET PASSWORD ERROR:", repr(e))
+
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+
+# ============================================================
+# YOLO MODEL
+# ============================================================
 
 MODEL_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -15,54 +439,101 @@ MODEL_PATH = os.path.join(
     "best.pt"
 )
 
-model = YOLO(MODEL_PATH)
+if not os.path.exists(MODEL_PATH):
 
-print("YOLO model loaded successfully!")
-print("YOLO Classes:", model.names)
+    print("WARNING: YOLO model not found:")
+    print(MODEL_PATH)
+
+    model = None
+
+else:
+
+    try:
+
+        model = YOLO(MODEL_PATH)
+
+        print("========================================")
+        print("YOLO MODEL LOADED SUCCESSFULLY")
+        print("MODEL:", MODEL_PATH)
+        print("YOLO CLASSES:", model.names)
+        print("========================================")
+
+    except Exception as e:
+
+        print("YOLO MODEL LOAD ERROR:", repr(e))
+        model = None
+
+
+# ============================================================
+# TEST API
+# ============================================================
 
 @app.route("/api/test", methods=["GET"])
 def test():
+
     return jsonify({
         "status": "success",
         "message": "API Working Successfully"
     })
 
 
+# ============================================================
+# OPENCV TEST
+# ============================================================
+
 @app.route("/api/opencv-test", methods=["GET"])
 def opencv_test():
+
     return jsonify({
         "status": "success",
         "opencv": cv2.__version__,
         "message": "OpenCV connected with Flask backend"
     })
 
+
+# ============================================================
+# YOLO FOOD DETECTION
+# ============================================================
+
 @app.route("/api/detect", methods=["POST"])
 def detect_food():
 
     if "image" not in request.files:
+
         return jsonify({
             "success": False,
             "error": "No image received"
         }), 400
 
-    try:
-        print("=== NEW DETECT CODE RUNNING ===")
+    if model is None:
 
-        # --------------------------------------------------
-        # 1. Receive image
-        # --------------------------------------------------
+        return jsonify({
+            "success": False,
+            "error": "YOLO model is not loaded"
+        }), 500
+
+    try:
+
+        print("========================================")
+        print("NEW FOOD DETECTION")
+        print("========================================")
 
         image_file = request.files["image"]
+
         image_bytes = image_file.read()
 
-        # --------------------------------------------------
-        # 2. Convert image to OpenCV format
-        # --------------------------------------------------
+        image_array = np.frombuffer(
+            image_bytes,
+            np.uint8
+        )
 
-        image_array = np.frombuffer(image_bytes, np.uint8)
-        image = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        image = cv2.imdecode(
+            image_array,
+            cv2.IMREAD_COLOR
+        )
 
         if image is None:
+
             return jsonify({
                 "success": False,
                 "error": "Invalid image"
@@ -71,9 +542,9 @@ def detect_food():
         print("IMAGE SHAPE:", image.shape)
         print("IMAGE SIZE:", image.size)
 
-        # --------------------------------------------------
-        # 3. YOLO Detection
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # YOLO PREDICTION
+        # ----------------------------------------------------
 
         results = model(
             image,
@@ -84,13 +555,8 @@ def detect_food():
 
         result = results[0]
 
-        print("ALL DETECTIONS:")
-
-        # --------------------------------------------------
-        # 4. Check if no detection
-        # --------------------------------------------------
-
         if result.boxes is None or len(result.boxes) == 0:
+
             print("NO FOOD DETECTED")
 
             return jsonify({
@@ -103,19 +569,24 @@ def detect_food():
                 "message": "No food detected"
             })
 
-        # --------------------------------------------------
-        # 5. Store all detections
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # GET ALL DETECTIONS
+        # ----------------------------------------------------
 
         detections = []
 
         for box in result.boxes:
 
             class_id = int(box.cls[0])
-            confidence_value = float(box.conf[0])
+
+            confidence_value = float(
+                box.conf[0]
+            )
+
             name = model.names[class_id]
 
             print(
+                "DETECTION:",
                 name,
                 round(confidence_value, 4)
             )
@@ -125,11 +596,21 @@ def detect_food():
                 "confidence": confidence_value
             })
 
-        print("DETECTIONS LIST:", detections)
+        if not detections:
 
-        # --------------------------------------------------
-        # 6. Default = highest confidence
-        # --------------------------------------------------
+            return jsonify({
+                "success": True,
+                "detection": "",
+                "food_name": "",
+                "confidence": 0.0,
+                "price": None,
+                "available": False,
+                "message": "No food detected"
+            })
+
+        # ----------------------------------------------------
+        # BEST DETECTION
+        # ----------------------------------------------------
 
         best_detection = max(
             detections,
@@ -145,13 +626,15 @@ def detect_food():
             round(confidence, 4)
         )
 
-        # --------------------------------------------------
-        # 7. Puri Bhaji priority
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # PURI BHAJI PRIORITY
+        # ----------------------------------------------------
 
         puri_bhaji_detections = [
-            d for d in detections
-            if d["name"].strip().lower() == "puri bhaji"
+            d
+            for d in detections
+            if d["name"].strip().lower()
+            == "puri bhaji"
         ]
 
         if puri_bhaji_detections:
@@ -161,16 +644,16 @@ def detect_food():
                 for d in puri_bhaji_detections
             )
 
-            print(
-                "PURI BHAJI CONFIDENCE:",
-                round(puri_confidence, 4)
-            )
-
-            # Puri Bhaji priority correction
             if (
                 puri_confidence >= 0.04
-                and best_detection["name"].strip().lower() == "misal pav"
-                and (best_detection["confidence"] - puri_confidence) <= 0.03
+                and
+                best_detection["name"].strip().lower()
+                == "misal pav"
+                and
+                (
+                    best_detection["confidence"]
+                    - puri_confidence
+                ) <= 0.03
             ):
 
                 food_name = "Puri Bhaji"
@@ -181,55 +664,42 @@ def detect_food():
                     round(confidence, 4)
                 )
 
-        # --------------------------------------------------
-        # 8. Final detection
-        # --------------------------------------------------
-
         print(
             "FINAL DETECTION:",
             food_name,
             round(confidence, 4)
         )
 
-        print(
-            "DEBUG FOOD:",
-            food_name
-        )
-
-        print(
-            "DEBUG CONFIDENCE:",
-            confidence
-        )
-
-        # --------------------------------------------------
-        # 9. Get food details from database
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # DATABASE LOOKUP
+        # ----------------------------------------------------
 
         conn = get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT Food_id, Food_name, Price, Available
+            SELECT
+                Food_id,
+                Food_name,
+                Price,
+                Available
             FROM food_menu
             WHERE LOWER(TRIM(Food_name))
                   = LOWER(TRIM(?))
             LIMIT 1
-        """, (food_name,))
+        """, (
+            food_name,
+        ))
 
         food = cursor.fetchone()
 
         conn.close()
 
-        # --------------------------------------------------
-        # 10. Food not found in database
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # FOOD NOT FOUND IN DATABASE
+        # ----------------------------------------------------
 
         if food is None:
-
-            print(
-                "FOOD NOT FOUND IN DATABASE:",
-                food_name
-            )
 
             return jsonify({
                 "success": True,
@@ -241,103 +711,133 @@ def detect_food():
                 "message": "Food detected but not found in database"
             })
 
-        # --------------------------------------------------
-        # 11. Food found
-        # --------------------------------------------------
+        # ----------------------------------------------------
+        # AVAILABLE VALUE
+        # ----------------------------------------------------
 
-        print(
-            "DATABASE FOOD:",
-            food["Food_name"]
-        )
-
-        print(
-            "DATABASE PRICE:",
-            food["Price"]
-        )
-
-        print(
-            "DATABASE AVAILABLE:",
+        available_value = str(
             food["Available"]
-        )
+        ).strip().lower()
 
-        # --------------------------------------------------
-        # 12. Final API response
-        # --------------------------------------------------
+        is_available = available_value in [
+            "1",
+            "true",
+            "yes",
+            "available"
+        ]
+
+        # ----------------------------------------------------
+        # FINAL RESPONSE
+        # ----------------------------------------------------
 
         return jsonify({
             "success": True,
-            "detection": f"{food['Food_name']}|{confidence}",
+            "detection": (
+                f"{food['Food_name']}|{confidence}"
+            ),
             "food_name": food["Food_name"],
             "confidence": confidence,
             "price": food["Price"],
-            "available": str(food["Available"]).lower()
-                         in ["1", "true", "available"]
-        })
-
-    # ------------------------------------------------------
-    # 13. Error handling
-    # ------------------------------------------------------
+            "available": is_available
+        }), 200
 
     except Exception as e:
 
-        print(
-            "DETECTION ERROR:",
-            e
-        )
+        print("DETECTION ERROR:", repr(e))
 
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
-        
+
+
+# ============================================================
+# HOME
+# ============================================================
+
 @app.route("/")
 def home():
+
     return "Smart Canteen Backend Running Successfully"
 
+
+# ============================================================
+# GET FOODS
+# ============================================================
 
 @app.route("/api/foods", methods=["GET"])
 def get_foods():
 
-    conn = get_connection()
-    cursor = conn.cursor()
+    try:
 
-    cursor.execute("""
-        SELECT Food_id,
-               Category_id,
-               Food_name,
-               Price,
-               Image,
-               Available
-        FROM food_menu
-    """)
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    rows = cursor.fetchall()
+        cursor.execute("""
+            SELECT
+                Food_id,
+                Category_id,
+                Food_name,
+                Price,
+                Image,
+                Available
+            FROM food_menu
+        """)
 
-    print("FOODS FROM DATABASE:", len(rows))
+        rows = cursor.fetchall()
 
-    foods = []
+        foods = []
 
-    for row in rows:
+        for row in rows:
 
-        image_path = row["Image"].replace("\\", "/").replace("assest", "assets")
+            image_path = row["Image"]
 
-        foods.append({
-            "Food_id": row["Food_id"],
-            "Category_id": row["Category_id"],
-            "Food_name": row["Food_name"],
-            "Price": row["Price"],
-            "Image": "../" + image_path,
-            "Available": row["Available"]
-        })
+            if image_path:
 
-    conn.close()
+                image_path = image_path.replace(
+                    "\\",
+                    "/"
+                )
 
-    print("FOODS SENT TO FRONTEND:", len(foods))
+                image_path = image_path.replace(
+                    "assest",
+                    "assets"
+                )
 
-    return jsonify(foods)
+            foods.append({
+                "Food_id": row["Food_id"],
+                "Category_id": row["Category_id"],
+                "Food_name": row["Food_name"],
+                "Price": row["Price"],
+                "Image": (
+                    "../" + image_path
+                    if image_path
+                    else ""
+                ),
+                "Available": row["Available"]
+            })
+
+        conn.close()
+
+        return jsonify(foods), 200
+
+    except Exception as e:
+
+        print("GET FOODS ERROR:", repr(e))
+
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+
+# ============================================================
+# ADD FOOD
+# ============================================================
 
 @app.route("/api/foods", methods=["POST"])
 def add_food():
+
     data = request.get_json() or {}
 
     name = data.get("Food_name")
@@ -346,135 +846,243 @@ def add_food():
     image = data.get("Image", "")
     available = data.get("Available", "1")
 
-    if not name or category_id is None or price is None:
+    if (
+        not name
+        or category_id is None
+        or price is None
+    ):
+
         return jsonify({
             "success": False,
-            "message": "Food name, category and price are required"
+            "message": (
+                "Food name, category and price "
+                "are required"
+            )
         }), 400
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO food_menu
-        (Category_id, Food_name, Price, Image, Available)
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        category_id,
-        name,
-        price,
-        image,
-        available
-    ))
+    try:
 
-    conn.commit()
-    food_id = cursor.lastrowid
-    conn.close()
+        cursor.execute("""
+            INSERT INTO food_menu
+            (
+                Category_id,
+                Food_name,
+                Price,
+                Image,
+                Available
+            )
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            category_id,
+            name,
+            price,
+            image,
+            available
+        ))
 
-    return jsonify({
-        "success": True,
-        "message": "Food item added successfully",
-        "Food_id": food_id
-    }), 201
+        conn.commit()
 
-@app.route("/api/categories")
+        food_id = cursor.lastrowid
+
+        return jsonify({
+            "success": True,
+            "message": "Food item added successfully",
+            "Food_id": food_id
+        }), 201
+
+    except Exception as e:
+
+        conn.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
+
+
+# ============================================================
+# CATEGORIES
+# ============================================================
+
+@app.route("/api/categories", methods=["GET"])
 def get_categories():
+
     conn = get_connection()
 
-    categories = conn.execute(
-        "SELECT * FROM Food_Category"
-    ).fetchall()
+    try:
 
-    conn.close()
+        categories = conn.execute(
+            "SELECT * FROM Food_Category"
+        ).fetchall()
 
-    return jsonify([
-        dict(category) for category in categories
-    ])
+        return jsonify([
+            dict(category)
+            for category in categories
+        ]), 200
 
-@app.route("/api/foods/<int:food_id>", methods=["PUT"])
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
+
+
+# ============================================================
+# UPDATE FOOD
+# ============================================================
+
+@app.route(
+    "/api/foods/<int:food_id>",
+    methods=["PUT"]
+)
 def update_food(food_id):
+
     data = request.get_json() or {}
 
     name = data.get("Food_name")
     category_id = data.get("Category_id")
     price = data.get("Price")
-    image = data.get("Image")
+    image = data.get("Image", "")
     available = data.get("Available", "1")
 
-    if not name or category_id is None or price is None:
+    if (
+        not name
+        or category_id is None
+        or price is None
+    ):
+
         return jsonify({
             "success": False,
-            "message": "Food name, category and price are required"
+            "message": (
+                "Food name, category and price "
+                "are required"
+            )
         }), 400
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        UPDATE food_menu
-        SET Food_name = ?,
-            Category_id = ?,
-            Price = ?,
-            Image = ?,
-            Available = ?
-        WHERE Food_id = ?
-    """, (
-        name,
-        category_id,
-        price,
-        image,
-        available,
-        food_id
-    ))
+    try:
 
-    conn.commit()
+        cursor.execute("""
+            UPDATE food_menu
+            SET
+                Food_name = ?,
+                Category_id = ?,
+                Price = ?,
+                Image = ?,
+                Available = ?
+            WHERE Food_id = ?
+        """, (
+            name,
+            category_id,
+            price,
+            image,
+            available,
+            food_id
+        ))
 
-    if cursor.rowcount == 0:
-        conn.close()
+        if cursor.rowcount == 0:
+
+            return jsonify({
+                "success": False,
+                "message": "Food item not found"
+            }), 404
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Food item updated successfully"
+        }), 200
+
+    except Exception as e:
+
+        conn.rollback()
+
         return jsonify({
             "success": False,
-            "message": "Food item not found"
-        }), 404
+            "message": str(e)
+        }), 500
 
-    conn.close()
+    finally:
 
-    return jsonify({
-        "success": True,
-        "message": "Food item updated successfully"
-    })
+        conn.close()
 
-@app.route("/api/foods/<int:food_id>", methods=["DELETE"])
+
+# ============================================================
+# DELETE FOOD
+# ============================================================
+
+@app.route(
+    "/api/foods/<int:food_id>",
+    methods=["DELETE"]
+)
 def delete_food(food_id):
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "DELETE FROM food_menu WHERE Food_id = ?",
-        (food_id,)
-    )
+    try:
 
-    conn.commit()
+        cursor.execute(
+            """
+            DELETE FROM food_menu
+            WHERE Food_id = ?
+            """,
+            (food_id,)
+        )
 
-    if cursor.rowcount == 0:
-        conn.close()
+        if cursor.rowcount == 0:
+
+            return jsonify({
+                "success": False,
+                "message": "Food item not found"
+            }), 404
+
+        conn.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Food item deleted successfully"
+        }), 200
+
+    except Exception as e:
+
+        conn.rollback()
+
         return jsonify({
             "success": False,
-            "message": "Food item not found"
-        }), 404
+            "message": str(e)
+        }), 500
 
-    conn.close()
+    finally:
 
-    return jsonify({
-        "success": True,
-        "message": "Food item deleted successfully"
-    }), 200
+        conn.close()
+
+
+# ============================================================
+# REGISTER STUDENT
+# ============================================================
 
 @app.route("/api/register", methods=["POST"])
 def register_student():
 
-    print("REGISTER DATA:", request.get_json())
-    
-    data = request.get_json()
+    data = request.get_json() or {}
+
+    print("REGISTER DATA:", data)
 
     name = data.get("name")
     enrollment = data.get("enrollment")
@@ -485,7 +1093,15 @@ def register_student():
     phone = data.get("phone")
     profile_images = data.get("profile_images")
 
-    if not name or not enrollment or not email or not department or not password or not phone:
+    if (
+        not name
+        or not enrollment
+        or not email
+        or not department
+        or not password
+        or not phone
+    ):
+
         return jsonify({
             "status": "error",
             "message": "Please fill all required fields"
@@ -494,128 +1110,224 @@ def register_student():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Check whether enrollment number already exists
-    cursor.execute(
-        "SELECT Id FROM student_table WHERE Enrollment_No = ?",
-        (enrollment,)
-    )
+    try:
 
-    if cursor.fetchone():
-        conn.close()
+        cursor.execute("""
+            SELECT Id
+            FROM student_table
+            WHERE Enrollment_No = ?
+        """, (
+            enrollment,
+        ))
+
+        if cursor.fetchone():
+
+            return jsonify({
+                "status": "error",
+                "message": (
+                    "Enrollment number "
+                    "already registered"
+                )
+            }), 409
+
+        cursor.execute("""
+            SELECT Id
+            FROM student_table
+            WHERE Email = ?
+        """, (
+            email,
+        ))
+
+        if cursor.fetchone():
+
+            return jsonify({
+                "status": "error",
+                "message": "Email already registered"
+            }), 409
+
+        if not profile_images:
+
+            if (
+                gender
+                and str(gender).lower()
+                == "female"
+            ):
+
+                profile_images = (
+                    "assets/profile/Female.svg"
+                )
+
+            else:
+
+                profile_images = (
+                    "assets/profile/male.svg"
+                )
+
+        cursor.execute("""
+            INSERT INTO student_table
+            (
+                Name,
+                Enrollment_No,
+                Email,
+                Department,
+                Password,
+                Gender,
+                Profile_images,
+                Mobile,
+                Created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """, (
+            name,
+            enrollment,
+            email,
+            department,
+            password,
+            gender,
+            profile_images,
+            phone
+        ))
+
+        conn.commit()
+
+        student_id = cursor.lastrowid
+
+        return jsonify({
+            "status": "success",
+            "message": "Registration successful",
+            "student_id": student_id
+        }), 201
+
+    except Exception as e:
+
+        conn.rollback()
+
         return jsonify({
             "status": "error",
-            "message": "Enrollment number already registered"
-        }), 409
+            "message": str(e)
+        }), 500
 
-    # Check whether email already exists
-    cursor.execute(
-        "SELECT Id FROM student_table WHERE Email = ?",
-        (email,)
-    )
+    finally:
 
-    if cursor.fetchone():
         conn.close()
-        return jsonify({
-            "status": "error",
-            "message": "Email already registered"
-        }), 409
 
-    # Ensure profile_images has a sensible default when not provided
-    if not profile_images:
-        profile_images = 'assets/profile/Female.svg' if (gender and str(gender).lower() == 'female') else 'assets/profile/male.svg'
 
-    cursor.execute("""
-        INSERT INTO student_table
-        (Name, Enrollment_No, Email, Department, Password, Gender, Profile_images, Mobile, Created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    """, (
-        name,
-        enrollment,
-        email,
-        department,
-        password,
-        gender,
-        profile_images,
-        phone
-    ))
-
-    conn.commit()
-    student_id = cursor.lastrowid
-
-    conn.close()
-
-    return jsonify({
-        "status": "success",
-        "message": "Registration successful",
-        "student_id": student_id
-    }), 201
+# ============================================================
+# LOGIN TEST
+# ============================================================
 
 @app.route("/api/login-test")
 def login_test():
+
     return "LOGIN ROUTE FILE IS LOADED"
+
+
+# ============================================================
+# STUDENT LOGIN
+# ============================================================
 
 @app.route("/api/login", methods=["POST"])
 def login_student():
-    print("🔥 LOGIN FUNCTION CALLED")
+
+    print("LOGIN FUNCTION CALLED")
+
     data = request.get_json() or {}
-    identifier = data.get('identifier')
-    password = data.get('password')
+
+    identifier = data.get("identifier")
+    password = data.get("password")
 
     if not identifier or not password:
-        return jsonify({"status": "error", "message": "Missing credentials"}), 400
+
+        return jsonify({
+            "status": "error",
+            "message": "Missing credentials"
+        }), 400
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT Id, Name, Enrollment_No, Email, Department, Mobile, Gender, Profile_images
-        FROM student_table
-        WHERE Enrollment_No = ? OR Email = ?
-    """, (identifier, identifier))
+    try:
 
-    row = cursor.fetchone()
-    conn.close()
+        cursor.execute("""
+            SELECT
+                Id,
+                Name,
+                Enrollment_No,
+                Email,
+                Department,
+                Mobile,
+                Gender,
+                Profile_images,
+                Password
+            FROM student_table
+            WHERE Enrollment_No = ?
+               OR Email = ?
+            LIMIT 1
+        """, (
+            identifier,
+            identifier
+        ))
+
+        row = cursor.fetchone()
+
+    finally:
+
+        conn.close()
 
     if not row:
-        return jsonify({"status": "error", "message": "User not found"}), 404
 
-    # fetch password separately to compare
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT Password FROM student_table WHERE Id = ?", (row['Id'],))
-    pwrow = cursor.fetchone()
-    conn.close()
+        return jsonify({
+            "status": "error",
+            "message": "User not found"
+        }), 404
 
-    stored_pw = pwrow['Password'] if pwrow else None
+    stored_pw = row["Password"]
+
     if stored_pw != password:
-        return jsonify({"status": "error", "message": "Invalid credentials"}), 401
+
+        return jsonify({
+            "status": "error",
+            "message": "Invalid credentials"
+        }), 401
 
     return jsonify({
         "status": "success",
         "user": {
-            "id": row['Id'],
-            "name": row['Name'],
-            "enrollment": row['Enrollment_No'],
-            "email": row['Email'],
-            "department": row['Department'],
-            "phone": row['Mobile'],
-            "gender": row['Gender'],
-            "profile_images": row['Profile_images']
+            "id": row["Id"],
+            "name": row["Name"],
+            "enrollment": row["Enrollment_No"],
+            "email": row["Email"],
+            "department": row["Department"],
+            "phone": row["Mobile"],
+            "gender": row["Gender"],
+            "profile_images": row["Profile_images"]
         }
     }), 200
 
 
-@app.route('/api/update_profile', methods=['POST'])
+# ============================================================
+# UPDATE PROFILE
+# ============================================================
+
+@app.route(
+    "/api/update_profile",
+    methods=["POST"]
+)
 def update_profile():
+
     data = request.get_json() or {}
 
-    enrollment = data.get('enrollment')
-    current_email = data.get('current_email')
+    enrollment = data.get("enrollment")
+    current_email = data.get("current_email")
 
     if not enrollment and not current_email:
+
         return jsonify({
             "status": "error",
-            "message": "Missing enrollment or current email"
+            "message": (
+                "Missing enrollment "
+                "or current email"
+            )
         }), 400
 
     field_map = {
@@ -632,10 +1344,18 @@ def update_profile():
     updates = {}
 
     for frontend_key, db_column in field_map.items():
-        if frontend_key in data and data[frontend_key] is not None:
-            updates[db_column] = data[frontend_key]
+
+        if (
+            frontend_key in data
+            and data[frontend_key] is not None
+        ):
+
+            updates[db_column] = data[
+                frontend_key
+            ]
 
     if not updates:
+
         return jsonify({
             "status": "error",
             "message": "No fields to update"
@@ -644,51 +1364,75 @@ def update_profile():
     conn = None
 
     try:
+
         conn = get_connection()
         cursor = conn.cursor()
 
-        # First find the exact student
         cursor.execute("""
-            SELECT Id, Email, Enrollment_No
+            SELECT
+                Id,
+                Email,
+                Enrollment_No
             FROM student_table
-            WHERE Enrollment_No = ? OR Email = ?
+            WHERE Enrollment_No = ?
+               OR Email = ?
             LIMIT 1
-        """, (enrollment, current_email))
+        """, (
+            enrollment,
+            current_email
+        ))
 
         student = cursor.fetchone()
 
         if not student:
+
             return jsonify({
                 "status": "error",
-                "message": "Student record not found"
+                "message": (
+                    "Student record not found"
+                )
             }), 404
 
-        # If email is being changed, check duplicate email
         if "Email" in updates:
-            new_email = str(updates["Email"]).strip()
+
+            new_email = str(
+                updates["Email"]
+            ).strip()
 
             cursor.execute("""
                 SELECT Id
                 FROM student_table
-                WHERE Email = ? AND Id != ?
-            """, (new_email, student["Id"]))
+                WHERE Email = ?
+                  AND Id != ?
+            """, (
+                new_email,
+                student["Id"]
+            ))
 
-            existing_email = cursor.fetchone()
+            if cursor.fetchone():
 
-            if existing_email:
                 return jsonify({
                     "status": "error",
-                    "message": "This email is already registered with another student."
+                    "message": (
+                        "This email is already "
+                        "registered with another student."
+                    )
                 }), 409
 
             updates["Email"] = new_email
 
         set_clause = ", ".join(
-            [f"{column} = ?" for column in updates.keys()]
+            f"{column} = ?"
+            for column in updates.keys()
         )
 
-        values = list(updates.values())
-        values.append(student["Id"])
+        values = list(
+            updates.values()
+        )
+
+        values.append(
+            student["Id"]
+        )
 
         query = f"""
             UPDATE student_table
@@ -696,21 +1440,32 @@ def update_profile():
             WHERE Id = ?
         """
 
-        cursor.execute(query, values)
+        cursor.execute(
+            query,
+            values
+        )
 
         conn.commit()
 
         return jsonify({
             "status": "success",
-            "message": "Profile updated successfully",
-            "updated_fields": list(updates.keys())
+            "message": (
+                "Profile updated successfully"
+            ),
+            "updated_fields": list(
+                updates.keys()
+            )
         }), 200
 
     except Exception as e:
+
         if conn:
             conn.rollback()
 
-        print("PROFILE UPDATE ERROR:", repr(e))
+        print(
+            "PROFILE UPDATE ERROR:",
+            repr(e)
+        )
 
         return jsonify({
             "status": "error",
@@ -718,24 +1473,36 @@ def update_profile():
         }), 500
 
     finally:
+
         if conn:
             conn.close()
 
+
+# ============================================================
+# CREATE ORDER
+# ============================================================
+
 @app.route("/api/orders", methods=["POST"])
 def create_order():
+
+    conn = None
+
     try:
-        data = request.get_json()
+
+        data = request.get_json() or {}
 
         user_id = data.get("user_id")
         items = data.get("items", [])
 
         if not user_id:
+
             return jsonify({
                 "status": "error",
                 "message": "User ID is required"
             }), 400
 
         if not items:
+
             return jsonify({
                 "status": "error",
                 "message": "Cart is empty"
@@ -746,32 +1513,52 @@ def create_order():
 
         total_amount = 0
 
-        # Calculate total
         for item in items:
+
             food_id = item.get("food_id")
-            quantity = int(item.get("quantity", 1))
-            price = float(item.get("price", 0))
+
+            quantity = int(
+                item.get("quantity", 1)
+            )
+
+            price = float(
+                item.get("price", 0)
+            )
 
             if not food_id or quantity <= 0:
-                conn.close()
+
                 return jsonify({
                     "status": "error",
                     "message": "Invalid cart item"
                 }), 400
 
-            total_amount += price * quantity
+            total_amount += (
+                price * quantity
+            )
 
-        # Create order
         cursor.execute("""
             INSERT INTO order_table
-            (user_id, total_amount, payment_status, order_status)
-            VALUES (?, ?, 'PENDING', 'PENDING')
-        """, (user_id, total_amount))
+            (
+                user_id,
+                total_amount,
+                payment_status,
+                order_status
+            )
+            VALUES (
+                ?,
+                ?,
+                'PENDING',
+                'PENDING'
+            )
+        """, (
+            user_id,
+            total_amount
+        ))
 
         order_id = cursor.lastrowid
 
-        # Add order items
         for item in items:
+
             cursor.execute("""
                 INSERT INTO Order_Item_Clean
                 ("order id", "food id", quantity, price)
@@ -784,7 +1571,6 @@ def create_order():
             ))
 
         conn.commit()
-        conn.close()
 
         return jsonify({
             "status": "success",
@@ -794,7 +1580,11 @@ def create_order():
         }), 201
 
     except Exception as e:
-        print("ORDER ERROR:", e)
+
+        if conn:
+            conn.rollback()
+
+        print("ORDER ERROR:", repr(e))
 
         return jsonify({
             "status": "error",
@@ -802,28 +1592,47 @@ def create_order():
             "error": str(e)
         }), 500
 
-@app.route("/api/orders/<int:order_id>/payment", methods=["PUT"])
+    finally:
+
+        if conn:
+            conn.close()
+
+
+# ============================================================
+# PAYMENT
+# ============================================================
+
+@app.route(
+    "/api/orders/<int:order_id>/payment",
+    methods=["PUT"]
+)
 def update_payment_status(order_id):
+
+    conn = None
+
     try:
+
         conn = get_connection()
         cursor = conn.cursor()
 
         cursor.execute("""
             UPDATE order_table
-            SET payment_status = 'PAID',
+            SET
+                payment_status = 'PAID',
                 order_status = 'COMPLETED'
             WHERE Id = ?
-        """, (order_id,))
+        """, (
+            order_id,
+        ))
 
         if cursor.rowcount == 0:
-            conn.close()
+
             return jsonify({
                 "status": "error",
                 "message": "Order not found"
             }), 404
 
         conn.commit()
-        conn.close()
 
         return jsonify({
             "status": "success",
@@ -832,192 +1641,274 @@ def update_payment_status(order_id):
         }), 200
 
     except Exception as e:
-        print("PAYMENT UPDATE ERROR:", e)
+
+        if conn:
+            conn.rollback()
+
+        print(
+            "PAYMENT UPDATE ERROR:",
+            repr(e)
+        )
 
         return jsonify({
             "status": "error",
-            "message": "Failed to update payment status",
+            "message": (
+                "Failed to update payment status"
+            ),
             "error": str(e)
         }), 500
 
-@app.route("/api/admin/students", methods=["GET"])
+    finally:
+
+        if conn:
+            conn.close()
+
+
+# ============================================================
+# ADMIN - STUDENTS GET
+# ============================================================
+
+@app.route(
+    "/api/admin/students",
+    methods=["GET"]
+)
 def get_admin_students():
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT
-            Id,
-            Name,
-            Enrollment_No,
-            Email,
-            Department,
-            Mobile,
-            Gender,
-            Created_at
-        FROM student_table
-        ORDER BY Id DESC
-    """)
+    try:
 
-    rows = cursor.fetchall()
+        cursor.execute("""
+            SELECT
+                Id,
+                Name,
+                Enrollment_No,
+                Email,
+                Department,
+                Mobile,
+                Gender,
+                Created_at
+            FROM student_table
+            ORDER BY Id DESC
+        """)
 
-    students = []
+        rows = cursor.fetchall()
 
-    for row in rows:
-        students.append({
-            "id": row["Id"],
-            "name": row["Name"],
-            "enrollment": row["Enrollment_No"],
-            "email": row["Email"],
-            "department": row["Department"],
-            "mobile": row["Mobile"],
-            "gender": row["Gender"],
-            "created_at": row["Created_at"]
-        })
+        students = []
 
-    conn.close()
+        for row in rows:
 
-    return jsonify(students)
+            students.append({
+                "id": row["Id"],
+                "name": row["Name"],
+                "enrollment": row["Enrollment_No"],
+                "email": row["Email"],
+                "department": row["Department"],
+                "mobile": row["Mobile"],
+                "gender": row["Gender"],
+                "created_at": row["Created_at"]
+            })
 
-@app.route("/api/admin/foods", methods=["GET"])
+        return jsonify(students), 200
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
+
+
+# ============================================================
+# ADMIN - FOODS GET
+# ============================================================
+
+@app.route(
+    "/api/admin/foods",
+    methods=["GET"]
+)
 def admin_get_foods():
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT Food_id,
-               Category_id,
-               Food_name,
-               Price,
-               Image,
-               Available
-        FROM food_menu
-        ORDER BY Food_id DESC
-    """)
+    try:
 
-    rows = cursor.fetchall()
-    print("API FOOD ROWS:", len(rows))
+        cursor.execute("""
+            SELECT
+                Food_id,
+                Category_id,
+                Food_name,
+                Price,
+                Image,
+                Available
+            FROM food_menu
+            ORDER BY Food_id DESC
+        """)
 
-    foods = []
+        rows = cursor.fetchall()
 
-    for row in rows:
-        foods.append({
-            "Food_id": row["Food_id"],
-            "Category_id": row["Category_id"],
-            "Food_name": row["Food_name"],
-            "Price": row["Price"],
-            "Image": row["Image"],
-            "Available": row["Available"]
-        })
+        foods = []
 
-    conn.close()
+        for row in rows:
 
-    return jsonify(foods)
+            foods.append({
+                "Food_id": row["Food_id"],
+                "Category_id": row["Category_id"],
+                "Food_name": row["Food_name"],
+                "Price": row["Price"],
+                "Image": row["Image"],
+                "Available": row["Available"]
+            })
 
-@app.route("/api/admin/orders", methods=["GET"])
+        return jsonify(foods), 200
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
+
+
+# ============================================================
+# ADMIN - ORDERS
+# ============================================================
+
+@app.route(
+    "/api/admin/orders",
+    methods=["GET"]
+)
 def get_admin_orders():
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT
-            o.id AS order_id,
-            o.user_id,
-            s.Name AS student_name,
-            s.Enrollment_No AS enrollment,
-            o.total_amount,
-            o.payment_status,
-            o.order_status,
-            o.order_time,
-            oi."food id" AS food_id,
-            f.Food_name AS food_name,
-            oi.quantity,
-            oi.price
-        FROM order_table o
-        JOIN student_table s
-            ON o.user_id = s.Id
-        JOIN Order_Item_Clean oi
-            ON o.id = oi."order id"
-        JOIN food_menu f
-            ON oi."food id" = f.Food_id
-        ORDER BY o.id DESC
-    """)
+    try:
 
-    rows = cursor.fetchall()
+        cursor.execute("""
+            SELECT
+                o.id AS order_id,
+                o.user_id,
+                s.Name AS student_name,
+                s.Enrollment_No AS enrollment,
+                o.total_amount,
+                o.payment_status,
+                o.order_status,
+                o.order_time,
+                oi."food id" AS food_id,
+                f.Food_name AS food_name,
+                oi.quantity,
+                oi.price
+            FROM order_table o
+            JOIN student_table s
+                ON o.user_id = s.Id
+            JOIN Order_Item_Clean oi
+                ON o.id = oi."order id"
+            JOIN food_menu f
+                ON oi."food id" = f.Food_id
+            ORDER BY o.id DESC
+        """)
 
-    orders = []
+        rows = cursor.fetchall()
 
-    for row in rows:
-        orders.append({
-            "order_id": row["order_id"],
-            "user_id": row["user_id"],
-            "student_name": row["student_name"],
-            "enrollment": row["enrollment"],
-            "total_amount": row["total_amount"],
-            "payment_status": row["payment_status"],
-            "order_status": row["order_status"],
-            "order_time": row["order_time"],
-            "food_id": row["food_id"],
-            "food_name": row["food_name"],
-            "quantity": row["quantity"],
-            "price": row["price"]
-        })
+        orders = []
 
-    conn.close()
+        for row in rows:
 
-    return jsonify(orders)
+            orders.append({
+                "order_id": row["order_id"],
+                "user_id": row["user_id"],
+                "student_name": row["student_name"],
+                "enrollment": row["enrollment"],
+                "total_amount": row["total_amount"],
+                "payment_status": row["payment_status"],
+                "order_status": row["order_status"],
+                "order_time": row["order_time"],
+                "food_id": row["food_id"],
+                "food_name": row["food_name"],
+                "quantity": row["quantity"],
+                "price": row["price"]
+            })
+
+        return jsonify(orders), 200
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
+
 
 # ============================================================
-# ADMIN DASHBOARD - DATABASE APIs
+# ADMIN DASHBOARD
 # ============================================================
 
-# ------------------------------------------------------------
-# DASHBOARD STATS
-# ------------------------------------------------------------
-@app.route("/api/admin/dashboard", methods=["GET"])
+@app.route(
+    "/api/admin/dashboard",
+    methods=["GET"]
+)
 def admin_dashboard():
 
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
-        # Total food items
+
         cursor.execute("""
             SELECT COUNT(*) AS total
             FROM food_menu
         """)
+
         total_foods = cursor.fetchone()["total"]
 
-        # Total students
         cursor.execute("""
             SELECT COUNT(*) AS total
             FROM student_table
         """)
+
         total_students = cursor.fetchone()["total"]
 
-        # Total orders
         cursor.execute("""
             SELECT COUNT(*) AS total
             FROM order_table
         """)
+
         total_orders = cursor.fetchone()["total"]
 
-        # Total revenue
         cursor.execute("""
-            SELECT COALESCE(SUM(total_amount), 0) AS total
+            SELECT COALESCE(
+                SUM(total_amount),
+                0
+            ) AS total
             FROM order_table
-            WHERE UPPER(payment_status) = 'PAID'
+            WHERE UPPER(payment_status)
+                  = 'PAID'
         """)
+
         total_revenue = cursor.fetchone()["total"]
 
-       # Pending orders
         cursor.execute("""
             SELECT COUNT(*) AS total
             FROM order_table
-            WHERE UPPER(order_status) = 'PENDING'
+            WHERE UPPER(order_status)
+                  = 'PENDING'
         """)
+
         pending_orders = cursor.fetchone()["total"]
 
         return jsonify({
@@ -1027,35 +1918,31 @@ def admin_dashboard():
             "total_orders": total_orders,
             "total_revenue": total_revenue,
             "pending_orders": pending_orders
-        })
+        }), 200
 
     except Exception as e:
+
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
 
     finally:
+
         conn.close()
 
 
 # ============================================================
-# ADMIN - FOOD CRUD
+# ADMIN - ADD FOOD
 # ============================================================
 
-# ------------------------------------------------------------
-# ADD FOOD
-# ------------------------------------------------------------
-@app.route("/api/admin/foods", methods=["POST"])
+@app.route(
+    "/api/admin/foods",
+    methods=["POST"]
+)
 def admin_add_food():
 
-    data = request.get_json()
-
-    if not data:
-        return jsonify({
-            "success": False,
-            "error": "Request body must contain JSON"
-        }), 400
+    data = request.get_json() or {}
 
     food_name = data.get("Food_name")
     category_id = data.get("Category_id")
@@ -1064,12 +1951,14 @@ def admin_add_food():
     available = data.get("Available", "Yes")
 
     if not food_name:
+
         return jsonify({
             "success": False,
             "error": "Food name is required"
         }), 400
 
     if price is None:
+
         return jsonify({
             "success": False,
             "error": "Price is required"
@@ -1116,22 +2005,21 @@ def admin_add_food():
         }), 500
 
     finally:
+
         conn.close()
 
 
-# ------------------------------------------------------------
-# UPDATE FOOD
-# ------------------------------------------------------------
-@app.route("/api/admin/foods/<int:food_id>", methods=["PUT"])
+# ============================================================
+# ADMIN - UPDATE FOOD
+# ============================================================
+
+@app.route(
+    "/api/admin/foods/<int:food_id>",
+    methods=["PUT"]
+)
 def admin_update_food(food_id):
 
-    data = request.get_json()
-
-    if not data:
-        return jsonify({
-            "success": False,
-            "error": "Request body must contain JSON"
-        }), 400
+    data = request.get_json() or {}
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1157,6 +2045,7 @@ def admin_update_food(food_id):
         ))
 
         if cursor.rowcount == 0:
+
             return jsonify({
                 "success": False,
                 "error": "Food not found"
@@ -1167,7 +2056,7 @@ def admin_update_food(food_id):
         return jsonify({
             "success": True,
             "message": "Food updated successfully"
-        })
+        }), 200
 
     except Exception as e:
 
@@ -1179,13 +2068,18 @@ def admin_update_food(food_id):
         }), 500
 
     finally:
+
         conn.close()
 
 
-# ------------------------------------------------------------
-# DELETE FOOD
-# ------------------------------------------------------------
-@app.route("/api/admin/foods/<int:food_id>", methods=["DELETE"])
+# ============================================================
+# ADMIN - DELETE FOOD
+# ============================================================
+
+@app.route(
+    "/api/admin/foods/<int:food_id>",
+    methods=["DELETE"]
+)
 def admin_delete_food(food_id):
 
     conn = get_connection()
@@ -1196,9 +2090,12 @@ def admin_delete_food(food_id):
         cursor.execute("""
             DELETE FROM food_menu
             WHERE Food_id = ?
-        """, (food_id,))
+        """, (
+            food_id,
+        ))
 
         if cursor.rowcount == 0:
+
             return jsonify({
                 "success": False,
                 "error": "Food not found"
@@ -1209,7 +2106,7 @@ def admin_delete_food(food_id):
         return jsonify({
             "success": True,
             "message": "Food deleted successfully"
-        })
+        }), 200
 
     except Exception as e:
 
@@ -1221,26 +2118,21 @@ def admin_delete_food(food_id):
         }), 500
 
     finally:
+
         conn.close()
 
 
 # ============================================================
-# ADMIN - STUDENT CRUD
+# ADMIN - ADD STUDENT
 # ============================================================
 
-# ------------------------------------------------------------
-# ADD STUDENT
-# ------------------------------------------------------------
-@app.route("/api/admin/students", methods=["POST"])
+@app.route(
+    "/api/admin/students",
+    methods=["POST"]
+)
 def admin_add_student():
 
-    data = request.get_json()
-
-    if not data:
-        return jsonify({
-            "success": False,
-            "error": "Request body must contain JSON"
-        }), 400
+    data = request.get_json() or {}
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1260,7 +2152,9 @@ def admin_add_student():
                 Profile_images,
                 Created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, datetime('now')
+            )
         """, (
             data.get("Name"),
             data.get("Enrollment_No"),
@@ -1290,22 +2184,21 @@ def admin_add_student():
         }), 500
 
     finally:
+
         conn.close()
 
 
-# ------------------------------------------------------------
-# UPDATE STUDENT
-# ------------------------------------------------------------
-@app.route("/api/admin/students/<int:student_id>", methods=["PUT"])
+# ============================================================
+# ADMIN - UPDATE STUDENT
+# ============================================================
+
+@app.route(
+    "/api/admin/students/<int:student_id>",
+    methods=["PUT"]
+)
 def admin_update_student(student_id):
 
-    data = request.get_json()
-
-    if not data:
-        return jsonify({
-            "success": False,
-            "error": "Request body must contain JSON"
-        }), 400
+    data = request.get_json() or {}
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -1335,6 +2228,7 @@ def admin_update_student(student_id):
         ))
 
         if cursor.rowcount == 0:
+
             return jsonify({
                 "success": False,
                 "error": "Student not found"
@@ -1345,7 +2239,7 @@ def admin_update_student(student_id):
         return jsonify({
             "success": True,
             "message": "Student updated successfully"
-        })
+        }), 200
 
     except Exception as e:
 
@@ -1357,13 +2251,18 @@ def admin_update_student(student_id):
         }), 500
 
     finally:
+
         conn.close()
 
 
-# ------------------------------------------------------------
-# DELETE STUDENT
-# ------------------------------------------------------------
-@app.route("/api/admin/students/<int:student_id>", methods=["DELETE"])
+# ============================================================
+# ADMIN - DELETE STUDENT
+# ============================================================
+
+@app.route(
+    "/api/admin/students/<int:student_id>",
+    methods=["DELETE"]
+)
 def admin_delete_student(student_id):
 
     conn = get_connection()
@@ -1374,9 +2273,12 @@ def admin_delete_student(student_id):
         cursor.execute("""
             DELETE FROM student_table
             WHERE Id = ?
-        """, (student_id,))
+        """, (
+            student_id,
+        ))
 
         if cursor.rowcount == 0:
+
             return jsonify({
                 "success": False,
                 "error": "Student not found"
@@ -1387,7 +2289,7 @@ def admin_delete_student(student_id):
         return jsonify({
             "success": True,
             "message": "Student deleted successfully"
-        })
+        }), 200
 
     except Exception as e:
 
@@ -1399,14 +2301,18 @@ def admin_delete_student(student_id):
         }), 500
 
     finally:
+
         conn.close()
 
 
 # ============================================================
-# ADMIN - QR MANAGEMENT
+# ADMIN - QR
 # ============================================================
 
-@app.route("/api/admin/qr", methods=["GET"])
+@app.route(
+    "/api/admin/qr",
+    methods=["GET"]
+)
 def admin_get_qr():
 
     conn = get_connection()
@@ -1429,6 +2335,7 @@ def admin_get_qr():
         qr_records = []
 
         for row in rows:
+
             qr_records.append({
                 "id": row["id"],
                 "qr_image": row["qr_image"],
@@ -1439,7 +2346,7 @@ def admin_get_qr():
         return jsonify({
             "success": True,
             "data": qr_records
-        })
+        }), 200
 
     except Exception as e:
 
@@ -1449,35 +2356,61 @@ def admin_get_qr():
         }), 500
 
     finally:
+
         conn.close()
 
-@app.route("/api/admin/login", methods=["POST"])
+
+# ============================================================
+# ADMIN LOGIN
+# ============================================================
+
+@app.route(
+    "/api/admin/login",
+    methods=["POST"]
+)
 def admin_login():
+
     data = request.get_json() or {}
 
     admin_id = data.get("admin_id")
     password = data.get("password")
 
     if not admin_id or not password:
+
         return jsonify({
             "status": "error",
-            "message": "Admin ID and password are required"
+            "message": (
+                "Admin ID and password "
+                "are required"
+            )
         }), 400
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT id, Username
-        FROM Admin_table
-        WHERE Username = ? AND Password = ?
-        LIMIT 1
-    """, (admin_id, password))
+    try:
 
-    admin = cursor.fetchone()
-    conn.close()
+        cursor.execute("""
+            SELECT
+                id,
+                Username
+            FROM Admin_table
+            WHERE Username = ?
+              AND Password = ?
+            LIMIT 1
+        """, (
+            admin_id,
+            password
+        ))
+
+        admin = cursor.fetchone()
+
+    finally:
+
+        conn.close()
 
     if not admin:
+
         return jsonify({
             "status": "error",
             "message": "Invalid admin credentials"
@@ -1493,62 +2426,140 @@ def admin_login():
         }
     }), 200
 
-@app.route("/api/notifications", methods=["GET"])
+
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
+
+@app.route(
+    "/api/notifications",
+    methods=["GET"]
+)
 def get_notifications():
+
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT id, title, message, created_at
-        FROM notification_table
-        ORDER BY id DESC
-    """)
+    try:
 
-    rows = cursor.fetchall()
-    conn.close()
+        cursor.execute("""
+            SELECT
+                id,
+                title,
+                message,
+                created_at
+            FROM notification_table
+            ORDER BY id DESC
+        """)
 
-    return jsonify([dict(row) for row in rows])
+        rows = cursor.fetchall()
+
+        return jsonify([
+            dict(row)
+            for row in rows
+        ]), 200
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
 
 
-@app.route("/api/notifications", methods=["POST"])
+# ============================================================
+# ADD NOTIFICATION
+# ============================================================
+
+@app.route(
+    "/api/notifications",
+    methods=["POST"]
+)
 def add_notification():
+
     data = request.get_json() or {}
 
     title = data.get("title")
     message = data.get("message")
 
     if not title or not message:
+
         return jsonify({
             "success": False,
-            "message": "Title and message are required"
+            "message": (
+                "Title and message "
+                "are required"
+            )
         }), 400
 
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        INSERT INTO notification_table (title, message)
-        VALUES (?, ?)
-    """, (title, message))
+    try:
 
-    conn.commit()
-    notification_id = cursor.lastrowid
-    conn.close()
+        cursor.execute("""
+            INSERT INTO notification_table
+            (
+                title,
+                message
+            )
+            VALUES (?, ?)
+        """, (
+            title,
+            message
+        ))
 
-    return jsonify({
-        "success": True,
-        "message": "Notification added successfully",
-        "id": notification_id
-    }), 201
+        conn.commit()
 
-@app.route("/api/admin/notifications", methods=["GET"])
+        notification_id = cursor.lastrowid
+
+        return jsonify({
+            "success": True,
+            "message": (
+                "Notification added successfully"
+            ),
+            "id": notification_id
+        }), 201
+
+    except Exception as e:
+
+        conn.rollback()
+
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+    finally:
+
+        conn.close()
+
+
+# ============================================================
+# ADMIN NOTIFICATIONS
+# ============================================================
+
+@app.route(
+    "/api/admin/notifications",
+    methods=["GET"]
+)
 def get_admin_notifications():
+
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
+
         cursor.execute("""
-            SELECT id, title, message, created_at
+            SELECT
+                id,
+                title,
+                message,
+                created_at
             FROM notification_table
             ORDER BY id DESC
         """)
@@ -1558,6 +2569,7 @@ def get_admin_notifications():
         notifications = []
 
         for row in rows:
+
             notifications.append({
                 "id": row["id"],
                 "title": row["title"],
@@ -1565,16 +2577,36 @@ def get_admin_notifications():
                 "created_at": row["created_at"]
             })
 
-        return jsonify(notifications)
+        return jsonify(notifications), 200
 
     except Exception as e:
+
         return jsonify({
             "success": False,
             "error": str(e)
         }), 500
 
     finally:
+
         conn.close()
 
+
+# ============================================================
+# RUN FLASK SERVER
+# ============================================================
+
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    print("========================================")
+    print("SMART CANTEEN FLASK SERVER")
+    print("========================================")
+    print("Server: http://127.0.0.1:5000")
+    print("Test:   http://127.0.0.1:5000/api/test")
+    print("OpenCV: http://127.0.0.1:5000/api/opencv-test")
+    print("========================================")
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True
+    )
